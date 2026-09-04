@@ -41,8 +41,8 @@ import { useOrganizationStore } from '@/stores/organization-store'
 
 import { ModelsChartPreferences } from './components/models/models-chart-preferences'
 import { ModelsFilter } from './components/models/models-filter-dialog'
+import { OrganizationUsageSelector } from './components/models/usage-scope-selector'
 import { OverviewDashboard } from './components/overview/overview-dashboard'
-import { DEFAULT_TIME_GRANULARITY } from './constants'
 import {
   buildDefaultDashboardFilters,
   getDefaultDays,
@@ -50,6 +50,7 @@ import {
   getSavedGranularity,
   saveChartPreferences,
 } from './lib'
+import type { UsageScope } from './lib/usage-scope'
 import {
   type DashboardSectionId,
   DASHBOARD_DEFAULT_SECTION,
@@ -58,7 +59,6 @@ import {
 import type {
   DashboardChartPreferences,
   DashboardFilters,
-  QuotaDataItem,
   UserChartsFilters,
 } from './types'
 
@@ -79,21 +79,9 @@ const PERFORMANCE_MODEL_FALLBACK_KEYS = [
   'secondary-model',
 ] as const
 
-const LazyLogStatCards = lazy(() =>
-  import('./components/models/log-stat-cards').then((m) => ({
-    default: m.LogStatCards,
-  }))
-)
-
-const LazyModelCharts = lazy(() =>
-  import('./components/models/model-charts').then((m) => ({
-    default: m.ModelCharts,
-  }))
-)
-
-const LazyConsumptionDistributionChart = lazy(() =>
-  import('./components/models/consumption-distribution-chart').then((m) => ({
-    default: m.ConsumptionDistributionChart,
+const LazyModelAnalytics = lazy(() =>
+  import('./components/models/model-analytics').then((m) => ({
+    default: m.ModelAnalytics,
   }))
 )
 
@@ -202,8 +190,9 @@ export function Dashboard() {
   const activeSection = (params.section ??
     DASHBOARD_DEFAULT_SECTION) as DashboardSectionId
 
-  const [modelData, setModelData] = useState<QuotaDataItem[]>([])
-  const [dataLoading, setDataLoading] = useState(false)
+  const [modelScope, setModelScope] = useState<UsageScope>({
+    type: 'organization',
+  })
   const [chartPreferences, setChartPreferences] =
     useState<DashboardChartPreferences>(() => getSavedChartPreferences())
   const [modelFilters, setModelFilters] = useState<DashboardFilters>(() =>
@@ -229,14 +218,6 @@ export function Dashboard() {
     setModelFilters(buildDefaultDashboardFilters(chartPreferences))
   }, [chartPreferences])
 
-  const handleDataUpdate = useCallback(
-    (data: QuotaDataItem[], loading: boolean) => {
-      setModelData(data)
-      setDataLoading(loading)
-    },
-    []
-  )
-
   const handleChartPreferencesChange = useCallback(
     (preferences: DashboardChartPreferences) => {
       setChartPreferences(preferences)
@@ -251,6 +232,9 @@ export function Dashboard() {
     (state) => state.context?.organization.kind === 'team'
   )
   const platform = usePlatformView()
+  const canReadOrganizationUsage = useOrganizationStore(
+    (state) => state.context?.capabilities.org['org.usage']?.read_all === true
+  )
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN) && platform
   const visibleSections = useMemo(
     () =>
@@ -273,6 +257,12 @@ export function Dashboard() {
   const modelActions =
     activeSection === 'models' ? (
       <>
+        {!platform && isTeam && canReadOrganizationUsage && (
+          <OrganizationUsageSelector
+            value={modelScope}
+            onChange={setModelScope}
+          />
+        )}
         <ModelsChartPreferences
           preferences={chartPreferences}
           onPreferencesChange={handleChartPreferencesChange}
@@ -359,14 +349,6 @@ export function Dashboard() {
           {activeSection === 'overview' && <OverviewDashboard />}
           {activeSection === 'models' && (
             <>
-              <FadeIn>
-                <Suspense fallback={<LogStatCardsFallback />}>
-                  <LazyLogStatCards
-                    filters={modelFilters}
-                    onDataUpdate={handleDataUpdate}
-                  />
-                </Suspense>
-              </FadeIn>
               {isAdmin && (
                 <FadeIn delay={0.05}>
                   <Suspense fallback={<PerformanceOverviewFallback />}>
@@ -374,29 +356,12 @@ export function Dashboard() {
                   </Suspense>
                 </FadeIn>
               )}
-              <FadeIn delay={0.1}>
-                <Suspense fallback={<ModelChartsFallback />}>
-                  <LazyConsumptionDistributionChart
-                    data={modelData}
-                    loading={dataLoading}
-                    defaultChartType={
-                      chartPreferences.consumptionDistributionChart
-                    }
-                    timeGranularity={
-                      modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
-                    }
-                  />
-                </Suspense>
-              </FadeIn>
-              <FadeIn delay={0.15}>
-                <Suspense fallback={<ModelChartsFallback />}>
-                  <LazyModelCharts
-                    data={modelData}
-                    loading={dataLoading}
-                    defaultChartTab={chartPreferences.modelAnalyticsChart}
-                    timeGranularity={
-                      modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
-                    }
+              <FadeIn>
+                <Suspense fallback={<LogStatCardsFallback />}>
+                  <LazyModelAnalytics
+                    filters={modelFilters}
+                    preferences={chartPreferences}
+                    scope={modelScope}
                   />
                 </Suspense>
               </FadeIn>
