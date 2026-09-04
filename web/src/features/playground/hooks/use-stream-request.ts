@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { SSE } from 'sse.js'
 
 import { getFreshAuthHeaders } from '@/lib/api'
+import { useOrganizationStore } from '@/stores/organization-store'
 
 import { API_ENDPOINTS, ERROR_MESSAGES } from '../constants'
 import {
@@ -190,7 +191,12 @@ export function useStreamRequest() {
   > | null>(null)
   if (!controllerRef.current) {
     controllerRef.current = createStreamRequestController({
-      getHeaders: getFreshAuthHeaders,
+      getHeaders: async () => {
+        const orgID = useOrganizationStore.getState().activeOrgID
+        const headers = await getFreshAuthHeaders()
+        if (orgID) headers['X-Org-Id'] = String(orgID)
+        return headers
+      },
       createSource: (payload, headers) =>
         new SSE(API_ENDPOINTS.CHAT_COMPLETIONS, {
           headers,
@@ -220,12 +226,17 @@ export function useStreamRequest() {
     controllerRef.current?.stop()
   }, [])
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const unsubscribe = useOrganizationStore.subscribe((state, previous) => {
+      if (state.epoch !== previous.epoch) {
+        controllerRef.current?.stop()
+      }
+    })
+    return () => {
+      unsubscribe()
       controllerRef.current?.dispose()
-    },
-    []
-  )
+    }
+  }, [])
 
   return {
     sendStreamRequest,
