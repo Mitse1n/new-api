@@ -5676,6 +5676,7 @@
     "You have unsaved changes": "You have unsaved changes",
     "You have unsaved changes. Are you sure you want to leave?": "You have unsaved changes. Are you sure you want to leave?",
     "You joined the organization.": "You joined the organization.",
+    "You manage this API key. Usage will be deducted from {{name}} quota.": "You manage this API key. Usage will be deducted from {{name}} quota.",
     "You Pay": "You Pay",
     "You save": "You save",
     "You understand and independently bear legal responsibility arising from deployment, operation, and charging behavior.": "You understand and independently bear legal responsibility arising from deployment, operation, and charging behavior.",

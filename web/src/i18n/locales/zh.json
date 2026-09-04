@@ -5676,6 +5676,7 @@
     "You have unsaved changes": "您有未保存的更改",
     "You have unsaved changes. Are you sure you want to leave?": "您有未保存的更改。确定要离开吗？",
     "You joined the organization.": "你已加入组织。",
+    "You manage this API key. Usage will be deducted from {{name}} quota.": "此 API 密钥由你管理，使用时从 {{name}} 的额度中扣除。",
     "You Pay": "您支付",
     "You save": "您节省",
     "You understand and independently bear legal responsibility arising from deployment, operation, and charging behavior.": "你理解并独立承担因部署、运营和收费行为产生的法律责任。",

@@ -5676,6 +5676,7 @@
     "You have unsaved changes": "Bạn có thay đổi chưa được lưu",
     "You have unsaved changes. Are you sure you want to leave?": "Bạn có thay đổi chưa được lưu. Bạn có chắc chắn muốn rời đi không?",
     "You joined the organization.": "Bạn đã tham gia tổ chức.",
+    "You manage this API key. Usage will be deducted from {{name}} quota.": "Bạn quản lý khóa API này. Mức sử dụng sẽ được trừ vào hạn mức của {{name}}.",
     "You Pay": "Bạn thanh toán",
     "You save": "Bạn tiết kiệm",
     "You understand and independently bear legal responsibility arising from deployment, operation, and charging behavior.": "Bạn hiểu và tự chịu trách nhiệm pháp lý phát sinh từ việc triển khai, vận hành và thu phí.",

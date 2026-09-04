@@ -803,9 +803,12 @@ export function ApiKeysMutateDrawer({
           desc={
             organization.organization.kind === 'personal'
               ? t('Create an API key for yourself using your personal balance?')
-              : t('Create an API key for yourself using {{name}} quota?', {
-                  name: organization.organization.name,
-                })
+              : t(
+                  'You manage this API key. Usage will be deducted from {{name}} quota.',
+                  {
+                    name: organization.organization.name,
+                  }
+                )
           }
           confirmText={t('Create API Key')}
           handleConfirm={() => {

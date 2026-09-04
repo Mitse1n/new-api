@@ -5676,6 +5676,7 @@
     "You have unsaved changes": "У вас есть несохранённые изменения",
     "You have unsaved changes. Are you sure you want to leave?": "У вас есть несохранённые изменения. Вы уверены, что хотите уйти?",
     "You joined the organization.": "Вы присоединились к организации.",
+    "You manage this API key. Usage will be deducted from {{name}} quota.": "Вы управляете этим API-ключом. Использование будет списываться из квоты {{name}}.",
     "You Pay": "Вы платите",
     "You save": "Вы экономите",
     "You understand and independently bear legal responsibility arising from deployment, operation, and charging behavior.": "Вы понимаете и самостоятельно несете юридическую ответственность, возникающую из развертывания, эксплуатации и взимания платы.",

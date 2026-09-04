@@ -5676,6 +5676,7 @@
     "You have unsaved changes": "未保存の変更があります",
     "You have unsaved changes. Are you sure you want to leave?": "未保存の変更があります。離れてもよろしいですか？",
     "You joined the organization.": "組織に参加しました。",
+    "You manage this API key. Usage will be deducted from {{name}} quota.": "この API キーはあなたが管理します。使用量は {{name}} の割り当てから差し引かれます。",
     "You Pay": "お支払い額",
     "You save": "節約額",
     "You understand and independently bear legal responsibility arising from deployment, operation, and charging behavior.": "デプロイ、運用、課金行為に起因する法的責任を理解し、独立して負います。",
