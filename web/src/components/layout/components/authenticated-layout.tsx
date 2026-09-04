@@ -22,6 +22,7 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LayoutProvider } from '@/context/layout-provider'
 import { SearchProvider } from '@/context/search-provider'
 import { OrganizationSwitcher } from '@/features/organizations/components/OrganizationSwitcher'
+import { useHasTeamOrganizations } from '@/features/organizations/context'
 import { OrganizationBoundary } from '@/features/organizations/OrganizationBoundary'
 import { getCookie } from '@/lib/cookies'
 import { cn } from '@/lib/utils'
@@ -35,6 +36,7 @@ type AuthenticatedLayoutProps = {
 
 export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   const defaultOpen = getCookie('sidebar_state') !== 'false'
+  const hasTeamOrganizations = useHasTeamOrganizations()
 
   return (
     <OrganizationBoundary>
@@ -42,7 +44,11 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
         <SearchProvider>
           <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
             <SkipToMain />
-            <AppHeader leftContent={<OrganizationSwitcher />} />
+            <AppHeader
+              leftContent={
+                hasTeamOrganizations ? <OrganizationSwitcher /> : undefined
+              }
+            />
             <div className='flex min-h-0 w-full flex-1'>
               <AppSidebar />
               <SidebarInset

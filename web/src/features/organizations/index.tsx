@@ -71,7 +71,7 @@ export function OrganizationPage(props: { section: string }) {
       <SectionPageLayout.Title>{title}</SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='flex flex-col gap-5 px-4 pb-6'>
-          <OrganizationSummary />
+          {context.organization.kind === 'team' && <OrganizationSummary />}
           {permitted ? (
             content
           ) : (

@@ -16,10 +16,26 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 
+import { useAuthStore } from '@/stores/auth-store'
 import { useOrganizationStore } from '@/stores/organization-store'
+
+import { listOrganizations } from './api'
+
+export function useHasTeamOrganizations() {
+  const userID = useAuthStore((state) => state.auth.user?.id)
+  const epoch = useOrganizationStore((state) => state.epoch)
+  const organizations = useQuery({
+    queryKey: ['organizations', userID, epoch],
+    queryFn: listOrganizations,
+    enabled: !!userID,
+    select: (items) =>
+      items.some((organization) => organization.kind === 'team'),
+  })
+  return organizations.data ?? false
+}
 
 export function useOrganization() {
   const context = useOrganizationStore((state) => state.context)

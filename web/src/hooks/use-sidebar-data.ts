@@ -38,6 +38,7 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import type { SidebarData } from '@/components/layout/types'
+import { useHasTeamOrganizations } from '@/features/organizations/context'
 import { ROLE } from '@/lib/roles'
 import { useOrganizationStore } from '@/stores/organization-store'
 
@@ -50,6 +51,7 @@ import { useOrganizationStore } from '@/stores/organization-store'
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
   const platform = useOrganizationStore((state) => state.platform)
+  const hasTeamOrganizations = useHasTeamOrganizations()
   const capabilities = useOrganizationStore(
     (state) => state.context?.capabilities.org
   )
@@ -178,7 +180,22 @@ export function useSidebarData(): SidebarData {
       },
     ],
   }
-  if (!platform) {
+  if (!hasTeamOrganizations) {
+    // Personal-only accounts keep the original navigation and admin entries.
+    data.navGroups = data.navGroups.map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => item.url !== '/platform/organizations'
+      ),
+    }))
+    data.navGroups
+      .find((group) => group.id === 'personal')
+      ?.items.push({
+        title: t('Organization settings'),
+        url: '/organization/settings',
+        icon: Settings,
+      })
+  } else if (!platform) {
     data.navGroups = data.navGroups
       .filter((group) => group.id !== 'admin')
       .map((group) => ({

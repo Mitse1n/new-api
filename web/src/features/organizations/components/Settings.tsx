@@ -24,7 +24,13 @@ import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -53,6 +59,7 @@ import {
 } from '../api'
 import { useOrganization, useSwitchOrganization } from '../context'
 import type { OrganizationSettingsResponse } from '../types'
+import { CreateOrganization } from './CreateOrganization'
 
 export function Settings() {
   const { t } = useTranslation()
@@ -60,7 +67,25 @@ export function Settings() {
   const settings = useQuery({
     queryKey: ['organization-settings', context.organization.id],
     queryFn: getOrganizationSettings,
+    enabled: context.organization.kind === 'team',
   })
+  if (context.organization.kind === 'personal') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('Create organization')}</CardTitle>
+          <CardDescription>
+            {t(
+              'Bring your team together with shared billing and independent access.'
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CreateOrganization />
+        </CardContent>
+      </Card>
+    )
+  }
   if (!settings.data) {
     return (
       <p role='status'>
@@ -161,6 +186,9 @@ function SettingsForm(props: { initial: OrganizationSettingsResponse }) {
     context.membership.role === 'owner' && context.organization.kind === 'team'
   return (
     <div className='flex flex-col gap-5'>
+      <div className='flex justify-end'>
+        <CreateOrganization />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>{t('Organization settings')}</CardTitle>
