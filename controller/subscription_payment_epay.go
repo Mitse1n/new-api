@@ -51,7 +51,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 	}
 
 	userId := c.GetInt("id")
-	if plan.MaxPurchasePerUser > 0 {
+	if c.GetInt("org_id") == 0 && plan.MaxPurchasePerUser > 0 {
 		count, err := model.CountUserSubscriptionsByPlan(userId, plan.Id)
 		if err != nil {
 			common.ApiError(c, err)
@@ -85,6 +85,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 	}
 
 	order := &model.SubscriptionOrder{
+		OrgId:           c.GetInt("org_id"),
 		UserId:          userId,
 		PlanId:          plan.Id,
 		Money:           plan.PriceAmount,

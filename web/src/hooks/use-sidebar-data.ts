@@ -37,8 +37,9 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { type SidebarData } from '@/components/layout/types'
+import type { SidebarData } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
+import { useOrganizationStore } from '@/stores/organization-store'
 
 /**
  * Root navigation groups for the application sidebar.
@@ -48,8 +49,12 @@ import { ROLE } from '@/lib/roles'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const platform = useOrganizationStore((state) => state.platform)
+  const capabilities = useOrganizationStore(
+    (state) => state.context?.capabilities.org
+  )
 
-  return {
+  const data: SidebarData = {
     navGroups: [
       {
         id: 'chat',
@@ -121,6 +126,12 @@ export function useSidebarData(): SidebarData {
         title: t('Admin'),
         items: [
           {
+            title: t('Organizations'),
+            url: '/platform/organizations',
+            icon: Users,
+            requiredRole: ROLE.ADMIN,
+          },
+          {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
@@ -167,4 +178,55 @@ export function useSidebarData(): SidebarData {
       },
     ],
   }
+  if (!platform) {
+    data.navGroups = data.navGroups
+      .filter((group) => group.id !== 'admin')
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(
+          (item) =>
+            item.url !== '/wallet' || capabilities?.['org.billing']?.read
+        ),
+      }))
+    data.navGroups.splice(2, 0, {
+      id: 'organization',
+      title: t('Organization'),
+      items: [
+        { title: t('Members'), url: '/organization/members', icon: Users },
+        {
+          title: t('Billing & budgets'),
+          url: '/organization/billing',
+          icon: Wallet,
+        },
+        ...(capabilities?.['org.subscription']?.purchase
+          ? [
+              {
+                title: t('Plans & orders'),
+                url: '/organization/plans',
+                icon: CreditCard,
+              },
+            ]
+          : []),
+        ...(capabilities?.['org.settings']?.write
+          ? [
+              {
+                title: t('Organization settings'),
+                url: '/organization/settings',
+                icon: Settings,
+              },
+            ]
+          : []),
+        ...(capabilities?.['org.usage']?.read_all
+          ? [
+              {
+                title: t('Organization audit'),
+                url: '/organization/audit',
+                icon: FileText,
+              },
+            ]
+          : []),
+      ],
+    })
+  }
+  return data
 }

@@ -53,10 +53,10 @@ func seedDefaultPolicies() error {
 			continue
 		}
 		for _, permission := range PermissionsForRole(spec.Key) {
-			if _, err := e.AddPolicy(RoleSubject(spec.Key), permission.Resource, permission.Action, EffectAllow); err != nil {
+			if _, err := e.AddPolicy(RoleSubject(spec.Key), "*", permission.Resource, permission.Action, EffectAllow); err != nil {
 				return err
 			}
 		}
 	}
-	return nil
+	return seedOrganizationPolicies()
 }

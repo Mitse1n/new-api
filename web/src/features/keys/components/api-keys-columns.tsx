@@ -82,6 +82,12 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
   const staleAccessThreshold = dayjs(now).subtract(3, 'month').valueOf()
   return [
     {
+      accessorKey: 'user_id',
+      header: t('Creator'),
+      cell: ({ row }) =>
+        row.original.creator_name || row.original.user_id || '—',
+    },
+    {
       id: 'select',
       header: ({ table }) => (
         <Checkbox

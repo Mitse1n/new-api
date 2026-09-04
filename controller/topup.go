@@ -246,7 +246,7 @@ func validateTopUpQuota(amount int64) (int, error) {
 func rejectInvalidCreditedQuota(c *gin.Context, userId int, quota decimal.Decimal) bool {
 	creditedQuota, err := validateCreditedQuota(quota)
 	if err == nil {
-		err = model.ValidateTopUpQuotaCapacity(userId, creditedQuota)
+		err = model.ValidateTopUpQuotaCapacity(userId, creditedQuota, c.GetInt("org_id"))
 	}
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": err.Error()})
@@ -258,7 +258,7 @@ func rejectInvalidCreditedQuota(c *gin.Context, userId int, quota decimal.Decima
 func rejectInvalidTopUpQuota(c *gin.Context, userId int, amount int64) bool {
 	creditedQuota, err := validateTopUpQuota(amount)
 	if err == nil {
-		err = model.ValidateTopUpQuotaCapacity(userId, creditedQuota)
+		err = model.ValidateTopUpQuotaCapacity(userId, creditedQuota, c.GetInt("org_id"))
 	}
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": err.Error()})
@@ -283,7 +283,7 @@ func RequestEpay(c *gin.Context) {
 		return
 	}
 
-	group, err := model.GetUserGroup(id, true)
+	group, err := getTopUpBillingGroup(c)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "获取用户分组失败"})
 		return
@@ -330,6 +330,7 @@ func RequestEpay(c *gin.Context) {
 		amount = dAmount.Div(dQuotaPerUnit).IntPart()
 	}
 	topUp := &model.TopUp{
+		OrgId:           c.GetInt("org_id"),
 		UserId:          id,
 		Amount:          amount,
 		Money:           payMoney,
@@ -499,7 +500,7 @@ func RequestAmount(c *gin.Context) {
 	if rejectInvalidTopUpQuota(c, id, req.Amount) {
 		return
 	}
-	group, err := model.GetUserGroup(id, true)
+	group, err := getTopUpBillingGroup(c)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "获取用户分组失败"})
 		return
@@ -513,20 +514,8 @@ func RequestAmount(c *gin.Context) {
 }
 
 func GetUserTopUps(c *gin.Context) {
-	userId := c.GetInt("id")
 	pageInfo := common.GetPageQuery(c)
-	keyword := c.Query("keyword")
-
-	var (
-		topups []*model.TopUp
-		total  int64
-		err    error
-	)
-	if keyword != "" {
-		topups, total, err = model.SearchUserTopUps(userId, keyword, pageInfo)
-	} else {
-		topups, total, err = model.GetUserTopUps(userId, pageInfo)
-	}
+	topups, total, err := model.GetOrganizationTopUps(c.GetInt("org_id"), c.Query("keyword"), pageInfo)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -583,4 +572,12 @@ func AdminCompleteTopUp(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, nil)
+}
+
+// Payment pricing follows the selected organization, including team subscriptions.
+func getTopUpBillingGroup(c *gin.Context) (string, error) {
+	if c.GetInt("org_id") > 0 {
+		return c.GetString("group"), nil
+	}
+	return model.GetUserGroup(c.GetInt("id"), true)
 }

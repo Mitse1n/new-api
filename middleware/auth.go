@@ -266,7 +266,7 @@ func TokenOrUserAuth() func(c *gin.Context) {
 				return
 			}
 			setDashboardAuthContext(c, user, identity, false)
-			c.Next()
+			OrganizationContext()(c)
 			return
 		}
 		// Opaque credentials are relay API keys here, never dashboard PATs.
@@ -316,7 +316,7 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 
 		// TokenAuthReadOnly must keep allowing other token states to query read-only
 		// data, such as token usage logs; only explicitly disabled tokens are denied.
-		if token.Status == common.TokenStatusDisabled {
+		if token.Status == common.TokenStatusDisabled || token.OrgId > 0 && token.OrgStatus != model.OrganizationActive {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"message": common.TranslateMessage(c, i18n.MsgTokenStatusUnavailable),
@@ -345,6 +345,7 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 		}
 
 		c.Set("id", token.UserId)
+		common.SetContextKey(c, constant.ContextKeyOrgId, token.OrgId)
 		c.Set("token_id", token.Id)
 		c.Set("token_key", token.Key)
 		c.Next()
@@ -459,6 +460,14 @@ func TokenAuth() func(c *gin.Context) {
 		userCache.WriteContext(c)
 
 		userGroup := userCache.Group
+		if token.OrgId > 0 {
+			if token.OrgStatus != model.OrganizationActive {
+				abortWithOpenAiMessage(c, http.StatusForbidden, "Organization unavailable.")
+				return
+			}
+			userGroup = token.OrgGroup
+			common.SetContextKey(c, constant.ContextKeyUserGroup, userGroup)
+		}
 		tokenGroup := token.Group
 		if tokenGroup != "" {
 			// check common.UserUsableGroups[userGroup]
@@ -489,6 +498,7 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	if token == nil {
 		return fmt.Errorf("token is nil")
 	}
+	common.SetContextKey(c, constant.ContextKeyOrgId, token.OrgId)
 	c.Set("id", token.UserId)
 	c.Set("token_id", token.Id)
 	c.Set("token_key", token.Key)
@@ -502,6 +512,24 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 		c.Set("token_model_limit", token.GetModelLimitsMap())
 	} else {
 		c.Set("token_model_limit_enabled", false)
+	}
+	if token.OrgId > 0 && token.OrgSettings != "" {
+		settings, err := (&model.Organization{Settings: token.OrgSettings}).EffectiveSettings()
+		if err != nil {
+			abortWithOpenAiMessage(c, http.StatusForbidden, "Organization unavailable.")
+			return err
+		}
+		if len(settings.AllowedModels) > 0 {
+			limits := map[string]bool{}
+			tokenLimits := token.GetModelLimitsMap()
+			for _, name := range settings.AllowedModels {
+				if !token.ModelLimitsEnabled || tokenLimits[name] {
+					limits[name] = true
+				}
+			}
+			c.Set("token_model_limit_enabled", true)
+			c.Set("token_model_limit", limits)
+		}
 	}
 	common.SetContextKey(c, constant.ContextKeyTokenGroup, token.Group)
 	common.SetContextKey(c, constant.ContextKeyTokenCrossGroupRetry, token.CrossGroupRetry)

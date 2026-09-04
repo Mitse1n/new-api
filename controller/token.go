@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
@@ -39,7 +40,8 @@ type tokenRequest struct {
 
 type tokenResponse struct {
 	*model.Token
-	AutoGroups []string `json:"auto_groups"`
+	AutoGroups  []string `json:"auto_groups"`
+	CreatorName string   `json:"creator_name,omitempty"`
 }
 
 func maxTokenQuota() int {
@@ -71,8 +73,28 @@ func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
 
 func buildMaskedTokenResponses(tokens []*model.Token) []*tokenResponse {
 	maskedTokens := make([]*tokenResponse, 0, len(tokens))
+	ids := make([]int, 0, len(tokens))
 	for _, token := range tokens {
-		maskedTokens = append(maskedTokens, buildMaskedTokenResponse(token))
+		ids = append(ids, token.UserId)
+	}
+	var creators []model.User
+	if len(ids) > 0 {
+		if err := model.DB.Unscoped().Select("id", "username", "display_name").Where("id IN ?", ids).Find(&creators).Error; err != nil {
+			common.SysError("token creators: " + err.Error())
+		}
+	}
+	names := make(map[int]string, len(creators))
+	for _, creator := range creators {
+		name := creator.DisplayName
+		if name == "" {
+			name = creator.Username
+		}
+		names[creator.Id] = name
+	}
+	for _, token := range tokens {
+		response := buildMaskedTokenResponse(token)
+		response.CreatorName = names[token.UserId]
+		maskedTokens = append(maskedTokens, response)
 	}
 	return maskedTokens
 }
@@ -127,45 +149,36 @@ func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) boo
 	return true
 }
 
+func tokenOrganizationScope(c *gin.Context) model.OrganizationResourceScope {
+	action := "read_all"
+	if c.Request.Method != http.MethodGet {
+		action = "write_all"
+	}
+	return model.OrganizationResourceScope{OrgID: c.GetInt("org_id"), UserID: c.GetInt("id"), AllMembers: authz.CanOrg(c.GetInt("id"), c.GetInt("org_id"), c.GetString("org_role"), authz.Permission{Resource: "org.token", Action: action})}
+}
+
 func GetAllTokens(c *gin.Context) {
-	userId := c.GetInt("id")
-	pageInfo := common.GetPageQuery(c)
-	tokens, err := model.GetAllUserTokens(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	page := common.GetPageQuery(c)
+	userID, _ := strconv.Atoi(c.Query("user_id"))
+	tokens, total, err := model.ListOrganizationTokens(tokenOrganizationScope(c), c.Query("keyword"), userID, page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	total, _ := model.CountUserTokens(userId)
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
-	common.ApiSuccess(c, pageInfo)
+	page.SetTotal(int(total))
+	page.SetItems(buildMaskedTokenResponses(tokens))
+	common.ApiSuccess(c, page)
 }
 
-func SearchTokens(c *gin.Context) {
-	userId := c.GetInt("id")
-	keyword := c.Query("keyword")
-	token := c.Query("token")
-
-	pageInfo := common.GetPageQuery(c)
-
-	tokens, total, err := model.SearchUserTokens(userId, keyword, token, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
-	common.ApiSuccess(c, pageInfo)
-}
+func SearchTokens(c *gin.Context) { GetAllTokens(c) }
 
 func GetToken(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt("id")
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	token, err := model.GetTokenByIds(id, userId)
+	token, err := model.GetOrganizationToken(tokenOrganizationScope(c), id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -186,20 +199,7 @@ func GetTokenAutoGroups(c *gin.Context) {
 }
 
 func GetTokenKey(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt("id")
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	token, err := model.GetTokenByIds(id, userId)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	common.ApiSuccess(c, gin.H{
-		"key": token.GetFullKey(),
-	})
+	c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "API key secrets are only available when created."})
 }
 
 func GetTokenStatus(c *gin.Context) {
@@ -243,7 +243,7 @@ func GetTokenUsage(c *gin.Context) {
 	}
 	tokenKey := parts[1]
 
-	token, err := model.GetTokenByKey(strings.TrimPrefix(tokenKey, "sk-"), false)
+	token, err := model.GetTokenByKey(strings.TrimPrefix(tokenKey, "sk-"), true)
 	if err != nil {
 		common.SysError("failed to get token by key: " + err.Error())
 		common.ApiErrorI18n(c, i18n.MsgTokenGetInfoFailed)
@@ -325,6 +325,7 @@ func AddToken(c *gin.Context) {
 		return
 	}
 	cleanToken := model.Token{
+		OrgId:              c.GetInt("org_id"),
 		UserId:             c.GetInt("id"),
 		Name:               token.Name,
 		Key:                key,
@@ -340,21 +341,22 @@ func AddToken(c *gin.Context) {
 		CrossGroupRetry:    token.CrossGroupRetry,
 		AutoGroups:         token.AutoGroups,
 	}
-	err = cleanToken.Insert()
+	err = model.InsertOrganizationToken(&cleanToken)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
+		"data":    &cleanToken,
 	})
 }
 
 func DeleteToken(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt("id")
-	err := model.DeleteTokenById(id, userId)
+	_, err := model.DeleteOrganizationTokens(tokenOrganizationScope(c), []int{id})
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -366,7 +368,6 @@ func DeleteToken(c *gin.Context) {
 }
 
 func UpdateToken(c *gin.Context) {
-	userId := c.GetInt("id")
 	statusOnly := c.Query("status_only")
 	request := tokenRequest{}
 	err := c.ShouldBindJSON(&request)
@@ -390,7 +391,7 @@ func UpdateToken(c *gin.Context) {
 			return
 		}
 	}
-	cleanToken, err := model.GetTokenByIds(token.Id, userId)
+	cleanToken, err := model.GetOrganizationToken(tokenOrganizationScope(c), token.Id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -427,7 +428,7 @@ func UpdateToken(c *gin.Context) {
 			}
 		}
 	}
-	err = cleanToken.Update()
+	err = model.UpdateOrganizationToken(tokenOrganizationScope(c), cleanToken, statusOnly != "")
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -449,8 +450,7 @@ func DeleteTokenBatch(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	userId := c.GetInt("id")
-	count, err := model.BatchDeleteTokens(tokenBatch.Ids, userId)
+	count, err := model.DeleteOrganizationTokens(tokenOrganizationScope(c), tokenBatch.Ids)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -462,25 +462,4 @@ func DeleteTokenBatch(c *gin.Context) {
 	})
 }
 
-func GetTokenKeysBatch(c *gin.Context) {
-	tokenBatch := TokenBatch{}
-	if err := c.ShouldBindJSON(&tokenBatch); err != nil || len(tokenBatch.Ids) == 0 {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
-		return
-	}
-	if len(tokenBatch.Ids) > 100 {
-		common.ApiErrorI18n(c, i18n.MsgBatchTooMany, map[string]any{"Max": 100})
-		return
-	}
-	userId := c.GetInt("id")
-	tokens, err := model.GetTokenKeysByIds(tokenBatch.Ids, userId)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	keysMap := make(map[int]string)
-	for _, t := range tokens {
-		keysMap[t.Id] = t.GetFullKey()
-	}
-	common.ApiSuccess(c, gin.H{"keys": keysMap})
-}
+func GetTokenKeysBatch(c *gin.Context) { GetTokenKey(c) }

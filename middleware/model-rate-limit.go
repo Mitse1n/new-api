@@ -80,6 +80,9 @@ func recordRedisRequest(ctx context.Context, rdb *redis.Client, key string, maxC
 func redisRateLimitHandler(duration int64, totalMaxCount, successMaxCount int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userId := strconv.Itoa(c.GetInt("id"))
+		if orgID := c.GetInt("org_id"); orgID > 0 {
+			userId = fmt.Sprintf("org:%d:%s", orgID, c.GetString("user_group"))
+		}
 		ctx := context.Background()
 		rdb := common.RDB
 
@@ -136,6 +139,9 @@ func memoryRateLimitHandler(duration int64, totalMaxCount, successMaxCount int) 
 
 	return func(c *gin.Context) {
 		userId := strconv.Itoa(c.GetInt("id"))
+		if orgID := c.GetInt("org_id"); orgID > 0 {
+			userId = fmt.Sprintf("org:%d:%s", orgID, c.GetString("user_group"))
+		}
 		totalKey := ModelRequestRateLimitCountMark + userId
 		successKey := ModelRequestRateLimitSuccessCountMark + userId
 

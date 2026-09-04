@@ -274,6 +274,7 @@ func TestInsertRejectsDuplicateEmailWithoutUniqueIndex(t *testing.T) {
 
 func TestInsertKeepsBlankPasswordForPasswordlessUser(t *testing.T) {
 	setupUserUpdateTestState(t)
+	require.NoError(t, DB.AutoMigrate(&Organization{}, &OrganizationMember{}))
 
 	user := &User{
 		Username: "passwordless-user",

@@ -91,6 +91,7 @@ import { useChartTheme } from '@/lib/use-chart-theme'
 import { cn } from '@/lib/utils'
 import { VCHART_OPTION } from '@/lib/vchart'
 import { useAuthStore } from '@/stores/auth-store'
+import { useOrganizationStore } from '@/stores/organization-store'
 
 import { FlowNodeFilterControl } from './flow-node-filter'
 
@@ -258,7 +259,8 @@ export function FlowCharts(props: FlowChartsProps) {
   const chartInstanceRef = useRef<IVChart | null>(null)
   const user = useAuthStore((state) => state.auth.user)
   const isRoot = Boolean(user?.role && user.role >= ROLE.SUPER_ADMIN)
-  const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
+  const platform = useOrganizationStore((state) => state.platform)
+  const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN) && platform
   let flowRole: FlowRole = 'user'
   if (isRoot) {
     flowRole = 'root'

@@ -52,6 +52,9 @@ func TestGetOpenAIVideoRouteRendersJimengTask(t *testing.T) {
 	require.NoError(t, database.Create(&model.Token{
 		Id:             1,
 		UserId:         91,
+		OrgId:          91,
+		OrgStatus:      model.OrganizationActive,
+		OrgGroup:       "default",
 		Key:            "jimengfetch",
 		Status:         common.TokenStatusEnabled,
 		Name:           "jimeng fetch",
@@ -72,6 +75,7 @@ func TestGetOpenAIVideoRouteRendersJimengTask(t *testing.T) {
 		CreatedAt: 1710000000,
 		UpdatedAt: 1710000060,
 		TaskID:    "task_jimeng_public",
+		OrgId:     91,
 		Platform:  constant.TaskPlatform("jimeng"),
 		UserId:    91,
 		Group:     "default",

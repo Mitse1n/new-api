@@ -46,3 +46,15 @@ func TestSetupContextForTokenMalformedAutoGroupsFailsClosed(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, []string{}, value)
 }
+
+func TestSetupContextForTokenProjectsOrganizationWithoutDatabaseAccess(t *testing.T) {
+	ctx := newTokenAutoGroupsContext()
+	oldDB := model.DB
+	model.DB = nil
+	t.Cleanup(func() { model.DB = oldDB })
+	token := &model.Token{Id: 9, UserId: 3, OrgId: 42, OrgSettings: `{"allowed_models":["allowed","outside-key"]}`, ModelLimitsEnabled: true, ModelLimits: "allowed,other"}
+	require.NoError(t, SetupContextForToken(ctx, token))
+	assert.Equal(t, 42, common.GetContextKeyInt(ctx, constant.ContextKeyOrgId))
+	assert.True(t, ctx.GetBool("token_model_limit_enabled"))
+	assert.Equal(t, map[string]bool{"allowed": true}, ctx.MustGet("token_model_limit"))
+}

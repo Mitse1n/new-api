@@ -16,6 +16,8 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -109,6 +111,11 @@ func setupTokenControllerTestDB(t *testing.T) *gorm.DB {
 
 	db := openTokenControllerTestDB(t)
 	migrateTokenControllerTestDB(t, db)
+	require.NoError(t, db.AutoMigrate(&model.Organization{}, &model.OrganizationMember{}, &model.OrganizationAudit{}))
+	for _, id := range []int{1, 2, 101} {
+		require.NoError(t, db.Create(&model.Organization{Id: id, Name: fmt.Sprint(id), Slug: fmt.Sprint(id), Kind: model.OrganizationPersonal, OwnerId: id, Status: model.OrganizationActive, Group: "default"}).Error)
+		require.NoError(t, db.Create(&model.OrganizationMember{OrgId: id, UserId: id, Role: model.OrgRoleOwner, Status: model.OrganizationActive}).Error)
+	}
 	return db
 }
 
@@ -164,6 +171,7 @@ func seedToken(t *testing.T, db *gorm.DB, userID int, name string, rawKey string
 	t.Helper()
 
 	token := &model.Token{
+		OrgId:          userID,
 		UserId:         userID,
 		Name:           name,
 		Key:            rawKey,
@@ -202,6 +210,8 @@ func newAuthenticatedContext(t *testing.T, method string, target string, body an
 		ctx.Request.Header.Set("Content-Type", "application/json")
 	}
 	ctx.Set("id", userID)
+	ctx.Set("org_id", userID)
+	ctx.Set("org_role", model.OrgRoleOwner)
 	return ctx, recorder
 }
 
@@ -545,36 +555,15 @@ func TestUpdateTokenMasksKeyInResponse(t *testing.T) {
 	}
 }
 
-func TestGetTokenKeyRequiresOwnershipAndReturnsFullKey(t *testing.T) {
+func TestGetTokenKeyNeverRevealsPersistedSecret(t *testing.T) {
 	db := setupTokenControllerTestDB(t)
 	token := seedToken(t, db, 1, "owned-token", "owner1234token5678")
-
-	authorizedCtx, authorizedRecorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/"+strconv.Itoa(token.Id)+"/key", nil, 1)
-	authorizedCtx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(token.Id)}}
-	GetTokenKey(authorizedCtx)
-
-	authorizedResponse := decodeAPIResponse(t, authorizedRecorder)
-	if !authorizedResponse.Success {
-		t.Fatalf("expected authorized key fetch to succeed, got message: %s", authorizedResponse.Message)
-	}
-
-	var keyData tokenKeyResponse
-	if err := common.Unmarshal(authorizedResponse.Data, &keyData); err != nil {
-		t.Fatalf("failed to decode token key response: %v", err)
-	}
-	if keyData.Key != token.GetFullKey() {
-		t.Fatalf("expected full key %q, got %q", token.GetFullKey(), keyData.Key)
-	}
-
-	unauthorizedCtx, unauthorizedRecorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/"+strconv.Itoa(token.Id)+"/key", nil, 2)
-	unauthorizedCtx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(token.Id)}}
-	GetTokenKey(unauthorizedCtx)
-
-	unauthorizedResponse := decodeAPIResponse(t, unauthorizedRecorder)
-	if unauthorizedResponse.Success {
-		t.Fatalf("expected unauthorized key fetch to fail")
-	}
-	if strings.Contains(unauthorizedRecorder.Body.String(), token.Key) {
-		t.Fatalf("unauthorized key response leaked raw token key: %s", unauthorizedRecorder.Body.String())
+	for _, userID := range []int{1, 2} {
+		ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/"+strconv.Itoa(token.Id)+"/key", nil, userID)
+		ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(token.Id)}}
+		GetTokenKey(ctx)
+		assert.Equal(t, http.StatusForbidden, recorder.Code)
+		assert.False(t, decodeAPIResponse(t, recorder).Success)
+		assert.NotContains(t, recorder.Body.String(), token.Key)
 	}
 }

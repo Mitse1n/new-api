@@ -36,7 +36,7 @@ func TestInitSeedsBuiltInRolesAndPoliciesOnce(t *testing.T) {
 	// root is a superuser role and is granted everything implicitly, so only the
 	// admin baseline is written as explicit policy rows.
 	var count int64
-	require.NoError(t, db.Model(&model.CasbinRule{}).Count(&count).Error)
+	require.NoError(t, db.Model(&model.CasbinRule{}).Where("v0 = ?", RoleSubject(BuiltInRoleAdmin)).Count(&count).Error)
 	assert.Equal(t, int64(len(PermissionsForRole(BuiltInRoleAdmin))), count)
 
 	var roles []model.AuthzRole
@@ -105,9 +105,8 @@ func TestSetUserPermissionsStoresOnlyOverrides(t *testing.T) {
 			ActionSensitiveWrite: true,
 			ActionSecretView:     false,
 		},
-		ResourceTaskPlugin: {
-			ActionBind: false,
-		},
+		ResourceTaskPlugin: {ActionBind: false},
+		"organization":     {ActionRead: true, ActionWrite: true},
 	}, ExplicitUserPermissions(42))
 	assert.Equal(t, PermissionsMap{
 		ResourceChannel: {
@@ -136,9 +135,8 @@ func TestSetUserPermissionsStoresOnlyOverrides(t *testing.T) {
 			ActionSensitiveWrite: false,
 			ActionSecretView:     false,
 		},
-		ResourceTaskPlugin: {
-			ActionBind: false,
-		},
+		ResourceTaskPlugin: {ActionBind: false},
+		"organization":     {ActionRead: true, ActionWrite: true},
 	}, ExplicitUserPermissions(42))
 	assert.Empty(t, ExplicitUserOverrides(42))
 }
@@ -261,11 +259,11 @@ func TestTaskPluginBindIsRootOnlyUntilGranted(t *testing.T) {
 
 	enforcer := currentEnforcer()
 	require.NotNil(t, enforcer)
-	_, err := enforcer.AddPolicy(RoleSubject(BuiltInRoleAdmin), ResourceTaskPlugin, ActionBind, EffectAllow)
+	_, err := enforcer.AddPolicy(RoleSubject(BuiltInRoleAdmin), "*", ResourceTaskPlugin, ActionBind, EffectAllow)
 	require.NoError(t, err)
 	assert.True(t, Can(2, common.RoleAdminUser, TaskPluginBind))
 
-	_, err = enforcer.RemovePolicy(RoleSubject(BuiltInRoleAdmin), ResourceTaskPlugin, ActionBind, EffectAllow)
+	_, err = enforcer.RemovePolicy(RoleSubject(BuiltInRoleAdmin), "*", ResourceTaskPlugin, ActionBind, EffectAllow)
 	require.NoError(t, err)
 	assert.False(t, Can(2, common.RoleAdminUser, TaskPluginBind))
 }

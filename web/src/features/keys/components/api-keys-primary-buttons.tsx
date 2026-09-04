@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 
-import { useApiKeys } from './api-keys-provider'
+import { useApiKeys } from './api-keys-context'
 
 export function ApiKeysPrimaryButtons() {
   const { t } = useTranslation()

@@ -21,6 +21,7 @@ import { createContext, useContext, useState, type ReactNode } from 'react'
 
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
+import { useOrganizationStore } from '@/stores/organization-store'
 
 import type { ChannelAffinityInfo } from '../types'
 
@@ -103,9 +104,15 @@ export function useUsageLogsContext() {
  */
 export function useLogsViewScope() {
   const role = useAuthStore((state) => state.auth.user?.role ?? ROLE.GUEST)
+  const platform = useOrganizationStore((state) => state.platform)
   const { viewScope, setViewScope } = useUsageLogsContext()
-  const canManageScope = role >= ROLE.ADMIN
-  const viewAccess = resolveLogsViewAccess(role, viewScope)
+  const orgManage = useOrganizationStore(
+    (state) => !!state.context?.capabilities.org['org.usage']?.read_all
+  )
+  const canManageScope = platform ? role >= ROLE.ADMIN : orgManage
+  let scopeRole: number = orgManage ? ROLE.ADMIN : ROLE.USER
+  if (platform) scopeRole = role
+  const viewAccess = resolveLogsViewAccess(scopeRole, viewScope)
   const isAdminView = viewAccess !== 'self'
   const isRootView = viewAccess === 'root'
 

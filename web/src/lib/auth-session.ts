@@ -29,6 +29,7 @@ import {
   type AuthUser,
   type LoginSession,
 } from '@/stores/auth-store'
+import { useOrganizationStore } from '@/stores/organization-store'
 
 export type RefreshOutcome =
   | { kind: 'authenticated'; bundle: AuthBundle }
@@ -189,6 +190,13 @@ export function clearAuthentication(
 ): void {
   const sid = useAuthStore.getState().auth.session?.sid
   authEpoch += 1
+  useOrganizationStore.setState((state) => ({
+    userID: null,
+    activeOrgID: null,
+    context: null,
+    platform: false,
+    epoch: state.epoch + 1,
+  }))
   useAuthStore.getState().auth.reset(bootstrapState)
   if (synchronizeTabs && sid) {
     publishAuthSessionEvent('signed_out', sid)

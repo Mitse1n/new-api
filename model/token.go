@@ -12,6 +12,10 @@ import (
 )
 
 type Token struct {
+	OrgStatus          int            `json:"-"`
+	OrgGroup           string         `json:"-" gorm:"type:varchar(64)"`
+	OrgSettings        string         `json:"-" gorm:"type:text"`
+	OrgId              int            `json:"org_id" gorm:"index:idx_org_token,priority:1"`
 	Id                 int            `json:"id"`
 	UserId             int            `json:"user_id" gorm:"index"`
 	Key                string         `json:"key" gorm:"type:varchar(128);uniqueIndex"`
@@ -238,7 +242,9 @@ func ValidateUserToken(key string) (token *Token, err error) {
 			}
 			return token, ErrTokenInvalid
 		}
-		if !token.UnlimitedQuota && token.RemainQuota <= 0 {
+		// Organization Key budgets are checked with the wallet transaction.
+		// A cached quota must not reject a Key after a committed refund.
+		if token.OrgId <= 0 && !token.UnlimitedQuota && token.RemainQuota <= 0 {
 			if !common.RedisEnabled {
 				token.Status = common.TokenStatusExhausted
 				err := token.SelectUpdate()

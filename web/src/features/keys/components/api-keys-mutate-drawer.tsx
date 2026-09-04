@@ -24,6 +24,7 @@ import { useForm, type SubmitErrorHandler } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DateTimePicker } from '@/components/datetime-picker'
 import {
   SideDrawerSection,
@@ -62,6 +63,7 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { useOrganization } from '@/features/organizations/context'
 import { useStatus } from '@/hooks/use-status'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
@@ -86,7 +88,7 @@ import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
 } from './api-key-group-combobox'
-import { useApiKeys } from './api-keys-provider'
+import { useApiKeys } from './api-keys-context'
 import { AutoGroupOrderEditor } from './auto-group-order-editor'
 
 type ApiKeyMutateDrawerProps = {
@@ -103,8 +105,12 @@ export function ApiKeysMutateDrawer({
   const { t } = useTranslation()
   const isUpdate = !!currentRow
   const currentRowId = currentRow?.id
-  const { triggerRefresh } = useApiKeys()
+  const { triggerRefresh, setCreatedSecrets } = useApiKeys()
+  const organization = useOrganization()
   const { status, loading: statusLoading } = useStatus()
+  const [pendingCreate, setPendingCreate] = useState<ApiKeyFormValues | null>(
+    null
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [initializedTarget, setInitializedTarget] = useState<string | null>(
@@ -279,6 +285,7 @@ export function ApiKeysMutateDrawer({
 
   const onSubmit = async (data: ApiKeyFormValues) => {
     setIsSubmitting(true)
+    const secrets: Array<{ name: string; key: string }> = []
     try {
       const basePayload = transformFormDataToPayload(data)
 
@@ -298,6 +305,7 @@ export function ApiKeysMutateDrawer({
         // Create mode - handle batch creation
         const count = data.tokenCount || 1
         let successCount = 0
+        setCreatedSecrets([])
 
         for (let i = 0; i < count; i++) {
           const result = await createApiKey({
@@ -308,6 +316,12 @@ export function ApiKeysMutateDrawer({
                 : `${data.name || 'default'}-${Math.random().toString(36).slice(2, 8)}`,
           })
           if (result.success) {
+            if (result.data?.key) {
+              secrets.push({
+                name: result.data.name,
+                key: `sk-${result.data.key}`,
+              })
+            }
             successCount++
           } else {
             toast.error(result.message || t(ERROR_MESSAGES.CREATE_FAILED))
@@ -328,6 +342,11 @@ export function ApiKeysMutateDrawer({
     } catch {
       toast.error(t(ERROR_MESSAGES.UNEXPECTED))
     } finally {
+      if (secrets.length > 0) {
+        onOpenChange(false)
+        triggerRefresh()
+        setCreatedSecrets(secrets)
+      }
       setIsSubmitting(false)
     }
   }
@@ -378,6 +397,10 @@ export function ApiKeysMutateDrawer({
             {isUpdate ? t('Update API Key') : t('Create API Key')}
           </SheetTitle>
           <SheetDescription>
+            {t('Organization: {{name}}', {
+              name: organization.organization.name,
+            })}
+            {' · '}
             {isUpdate
               ? t('Update the API key by providing necessary info.')
               : t('Add a new API key by providing necessary info.')}
@@ -386,7 +409,10 @@ export function ApiKeysMutateDrawer({
         <Form {...form}>
           <form
             id='api-key-form'
-            onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+            onSubmit={form.handleSubmit(
+              (data) => (isUpdate ? onSubmit(data) : setPendingCreate(data)),
+              onInvalid
+            )}
             aria-busy={!isFormInitialized}
             inert={!isFormInitialized || isSubmitting ? true : undefined}
             className={sideDrawerFormClassName('gap-5')}
@@ -758,13 +784,34 @@ export function ApiKeysMutateDrawer({
           </SheetClose>
           <Button
             type='button'
-            onClick={form.handleSubmit(onSubmit, onInvalid)}
+            onClick={form.handleSubmit(
+              (data) => (isUpdate ? onSubmit(data) : setPendingCreate(data)),
+              onInvalid
+            )}
             disabled={!isFormInitialized || isSubmitting}
             className='w-full sm:w-auto'
           >
             {isSubmitting ? t('Saving...') : t('Save changes')}
           </Button>
         </SheetFooter>
+        <ConfirmDialog
+          open={pendingCreate !== null}
+          onOpenChange={(value) => {
+            if (!value) setPendingCreate(null)
+          }}
+          title={t('Confirm organization')}
+          desc={t('Create API keys for {{name}}?', {
+            name: organization.organization.name,
+          })}
+          confirmText={t('Create API Key')}
+          handleConfirm={() => {
+            if (pendingCreate) {
+              const values = pendingCreate
+              setPendingCreate(null)
+              void onSubmit(values)
+            }
+          }}
+        />
       </SheetContent>
     </Sheet>
   )

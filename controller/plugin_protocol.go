@@ -418,6 +418,9 @@ func streamTaskPluginProtocol(
 			constant.TaskPlatform(pinned.Plugin.Meta.Key),
 			taskID,
 		)
+		if task != nil && task.OrgId != c.GetInt("org_id") {
+			task, exists = nil, false
+		}
 		loadContextErr := loadContext.Err()
 		cancelLoad()
 		loadElapsed := deps.now().Sub(loadStarted)
@@ -668,6 +671,9 @@ func waitTaskPluginProtocol(
 			constant.TaskPlatform(pinned.Plugin.Meta.Key),
 			taskID,
 		)
+		if task != nil && task.OrgId != c.GetInt("org_id") {
+			task, exists = nil, false
+		}
 		loadContextErr := loadContext.Err()
 		cancelLoad()
 		loadElapsed := deps.now().Sub(loadStarted)
@@ -938,6 +944,9 @@ func retrieveTaskPluginResponse(c *gin.Context, deps pluginProtocolBridgeDeps) {
 	logger.LogDebug(c, "task_plugin subsystem=protocol event=retrieve_start response_id=%q public_task_id=%q", responseID, taskID)
 
 	task, exists, err := deps.getByTaskId(userID, taskID)
+	if task != nil && task.OrgId != c.GetInt("org_id") {
+		task, exists = nil, false
+	}
 	if err != nil {
 		logger.LogError(c, "task protocol retrieve lookup failed")
 		logger.LogDebug(c, "task_plugin subsystem=protocol event=retrieve_failed reason=lookup_error public_task_id=%q", taskID)

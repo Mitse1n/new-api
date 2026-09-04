@@ -33,7 +33,7 @@ import {
 
 import { deleteApiKey } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
-import { useApiKeys } from './api-keys-provider'
+import { useApiKeys } from './api-keys-context'
 
 export function ApiKeysDeleteDialog() {
   const { t } = useTranslation()

@@ -1,0 +1,67 @@
+package main
+
+import (
+	"fmt"
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service/authz"
+	"os"
+)
+
+func main() {
+	common.IsMasterNode = true
+	if p := os.Getenv("SQLITE_PATH"); p != "" {
+		common.SQLitePath = p
+	}
+	if err := model.InitDB(); err != nil {
+		panic(err)
+	}
+	if err := model.InitLogDB(); err != nil {
+		panic(err)
+	}
+	var count int64
+	if err := model.DB.Model(&model.User{}).Count(&count).Error; err != nil {
+		panic(err)
+	}
+	if count == 0 {
+		user := model.User{Username: "legacy-owner", Email: "legacy@example.test", AffCode: "legacy-aff", Status: common.UserStatusEnabled, Role: common.RoleRootUser, Quota: 123456789012, UsedQuota: 321, Group: "default"}
+		if err := model.DB.Create(&user).Error; err != nil {
+			panic(err)
+		}
+		rows := []interface{}{&model.Token{UserId: user.Id, Key: "legacy-migration-key", Name: "legacy", RemainQuota: 12345, ExpiredTime: -1}, &model.TopUp{UserId: user.Id, TradeNo: "legacy-topup", Amount: 5, Money: 5, Status: common.TopUpStatusPending}, &model.Task{UserId: user.Id, TaskID: "legacy-task", Status: model.TaskStatusSuccess}, &model.Midjourney{UserId: user.Id, MjId: "legacy-mj"}, &model.QuotaData{UserID: user.Id, CreatedAt: 1700000000, Quota: 321}}
+		for _, row := range rows {
+			if err := model.DB.Create(row).Error; err != nil {
+				panic(err)
+			}
+		}
+		plan := model.SubscriptionPlan{Title: "Legacy plan", Enabled: true, DurationUnit: model.SubscriptionDurationMonth, DurationValue: 1, PriceAmount: 10, TotalAmount: 12345}
+		if err := model.DB.Create(&plan).Error; err != nil {
+			panic(err)
+		}
+		if err := model.DB.Create(&model.UserSubscription{UserId: user.Id, PlanId: plan.Id, Status: "active", AmountTotal: 12345, AmountUsed: 321, StartTime: 1700000000, EndTime: 2000000000}).Error; err != nil {
+			panic(err)
+		}
+		if err := model.DB.Create(&model.SubscriptionOrder{UserId: user.Id, PlanId: plan.Id, TradeNo: "legacy-subscription", Status: common.TopUpStatusPending, Money: 10}).Error; err != nil {
+			panic(err)
+		}
+		if err := model.LOG_DB.Create(&model.Log{UserId: user.Id, CreatedAt: 1700000000, Type: model.LogTypeConsume, Quota: 321, RequestId: "legacy-log"}).Error; err != nil {
+			panic(err)
+		}
+	}
+	if err := authz.Init(model.DB); err != nil {
+		panic(err)
+	}
+	var user model.User
+	if err := model.DB.Where("username = ?", "legacy-owner").First(&user).Error; err != nil || user.Quota != 123456789012 || user.UsedQuota != 321 {
+		panic("legacy wallet changed")
+	}
+	var token model.Token
+	if err := model.DB.Where("name = ?", "legacy").First(&token).Error; err != nil || token.Key != "legacy-migration-key" || token.RemainQuota != 12345 {
+		panic("legacy key changed")
+	}
+	var logs []model.Log
+	if err := model.LOG_DB.Where("request_id = ?", "legacy-log").Find(&logs).Error; err != nil || len(logs) != 1 || logs[0].Quota != 321 {
+		panic("legacy logs changed")
+	}
+	fmt.Println("RELEASE_FIXTURE_READY")
+}

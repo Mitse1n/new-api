@@ -11,6 +11,7 @@ type ActionDefinition struct {
 
 // ResourceDefinition describes a resource and the actions it exposes.
 type ResourceDefinition struct {
+	Scope    string             `json:"scope"`
 	Resource string             `json:"resource"`
 	LabelKey string             `json:"label_key"`
 	Actions  []ActionDefinition `json:"actions"`
@@ -20,6 +21,9 @@ var registry []ResourceDefinition
 
 // RegisterResource adds a resource definition to the permission registry.
 func RegisterResource(resource ResourceDefinition) {
+	if resource.Scope == "" {
+		resource.Scope = "platform"
+	}
 	registry = append(registry, resource)
 }
 
@@ -28,6 +32,7 @@ func Catalog() []ResourceDefinition {
 	result := make([]ResourceDefinition, 0, len(registry))
 	for _, resource := range registry {
 		result = append(result, ResourceDefinition{
+			Scope:    resource.Scope,
 			Resource: resource.Resource,
 			LabelKey: resource.LabelKey,
 			Actions:  append([]ActionDefinition(nil), resource.Actions...),

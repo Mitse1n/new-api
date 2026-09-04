@@ -45,6 +45,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useOrganization } from '@/features/organizations/context'
 import {
   getPublicPlans,
   getSelfSubscriptionFull,
@@ -70,7 +71,11 @@ interface SubscriptionPlansCardProps {
 
 function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
   return payMethods.filter(
-    (m) => m?.type && m.type !== 'stripe' && m.type !== 'creem'
+    (m) =>
+      m?.type &&
+      !['stripe', 'creem', 'waffo', 'waffo_pancake', 'waffo-pancake'].includes(
+        m.type
+      )
   )
 }
 
@@ -99,6 +104,7 @@ export function SubscriptionPlansCard({
   onPurchaseSuccess,
 }: SubscriptionPlansCardProps) {
   const { t } = useTranslation()
+  const organization = useOrganization()
 
   const [plans, setPlans] = useState<PlanRecord[]>([])
   const [activeSubscriptions, setActiveSubscriptions] = useState<
@@ -330,6 +336,7 @@ export function SubscriptionPlansCard({
                     label: getBillingPreferenceLabel('wallet_only', t),
                   },
                 ]}
+                disabled={organization.organization.kind === 'team'}
                 value={billingPreference}
                 onValueChange={(v) => v !== null && handlePreferenceChange(v)}
               >
@@ -532,6 +539,13 @@ export function SubscriptionPlansCard({
               const count = planPurchaseCountMap.get(plan.id) || 0
               const reached = limit > 0 && count >= limit
 
+              let audience = t('All organizations')
+              if (plan.audience === 'org') {
+                audience = t('Team organizations')
+              }
+              if (plan.audience === 'personal') {
+                audience = t('Personal organizations')
+              }
               const benefits = [
                 `${t('Validity Period')}: ${formatDuration(plan, t)}`,
                 formatResetPeriod(plan, t) !== t('No Reset')
@@ -541,6 +555,8 @@ export function SubscriptionPlansCard({
                   ? `${t('Total Quota')}: ${formatQuota(totalAmount)}`
                   : `${t('Total Quota')}: ${t('Unlimited')}`,
                 limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
+                `${t('Member limit')}: ${plan.max_members || t('Unlimited')}`,
+                `${t('Audience')}: ${audience}`,
                 plan.upgrade_group
                   ? `${t('Upgrade Group')}: ${plan.upgrade_group}`
                   : null,
@@ -640,6 +656,7 @@ export function SubscriptionPlansCard({
           }
         }}
         plan={selectedPlan}
+        enableWaffo={!!topupInfo?.enable_waffo_topup}
         enableStripe={enableStripe}
         enableCreem={enableCreem}
         enableWaffoPancake={enableWaffoPancake}

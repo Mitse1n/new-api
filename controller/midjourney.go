@@ -14,7 +14,6 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
-	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -294,7 +293,12 @@ func GetAllMidjourney(c *gin.Context) {
 
 	if setting.MjForwardUrlEnabled {
 		for i, midjourney := range items {
-			midjourney.ImageUrl = system_setting.ServerAddress + "/mj/image/" + midjourney.MjId
+			imageURL, err := service.BuildMidjourneyImageURL(midjourney)
+			if err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			midjourney.ImageUrl = imageURL
 			items[i] = midjourney
 		}
 	}
@@ -314,12 +318,17 @@ func GetUserMidjourney(c *gin.Context) {
 		EndTimestamp:   c.Query("end_timestamp"),
 	}
 
-	items := model.GetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
-	total := model.CountAllUserTask(userId, queryParams)
+	items := model.GetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams, organizationUsageScope(c))
+	total := model.CountAllUserTask(userId, queryParams, organizationUsageScope(c))
 
 	if setting.MjForwardUrlEnabled {
 		for i, midjourney := range items {
-			midjourney.ImageUrl = system_setting.ServerAddress + "/mj/image/" + midjourney.MjId
+			imageURL, err := service.BuildMidjourneyImageURL(midjourney)
+			if err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			midjourney.ImageUrl = imageURL
 			items[i] = midjourney
 		}
 	}

@@ -11,12 +11,12 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
-	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/relay"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
@@ -100,7 +100,7 @@ func TestDocumentPluginRunsGenericBatchArtifactChain(t *testing.T) {
 	require.NotNil(t, parsed)
 	require.Equal(t, "doc-upstream-1", parsed.UpstreamTaskID)
 	task := model.Task{
-		TaskID: info.PublicTaskID, Platform: "doc-parse", UserId: 7, ChannelId: channel.Id,
+		TaskID: info.PublicTaskID, Platform: "doc-parse", UserId: 7, OrgId: 7, ChannelId: channel.Id,
 		Status: model.TaskStatusInProgress, Data: parsed.TaskData,
 		PrivateData: model.TaskPrivateData{
 			UpstreamTaskID: parsed.UpstreamTaskID,
@@ -122,6 +122,7 @@ func TestDocumentPluginRunsGenericBatchArtifactChain(t *testing.T) {
 	queryRecorder := httptest.NewRecorder()
 	queryContext, _ := gin.CreateTestContext(queryRecorder)
 	queryContext.Set("id", 7)
+	queryContext.Set("org_id", 7)
 	queryContext.Params = gin.Params{{Key: "key", Value: task.TaskID}}
 	queryContext.Request = httptest.NewRequest(http.MethodGet, "/v1/tasks/"+task.TaskID+"/artifacts", nil)
 	controller.GetTaskArtifacts(queryContext)
@@ -140,6 +141,7 @@ func TestDocumentPluginRunsGenericBatchArtifactChain(t *testing.T) {
 	contentRecorder := httptest.NewRecorder()
 	contentContext, _ := gin.CreateTestContext(contentRecorder)
 	contentContext.Set("id", 7)
+	contentContext.Set("org_id", 7)
 	contentContext.Params = gin.Params{{Key: "key", Value: task.TaskID}, {Key: "artifact_key", Value: "text"}}
 	contentContext.Request = httptest.NewRequest(http.MethodGet, "/v1/tasks/"+task.TaskID+"/artifacts/text/content", nil)
 	controller.TaskArtifactContent(contentContext)

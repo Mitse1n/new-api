@@ -27,6 +27,8 @@ export function getPlanFormSchema(t: TFunction) {
   return z.object({
     title: z.string().min(1, t('Please enter plan title')),
     subtitle: z.string().optional(),
+    audience: z.enum(['personal', 'org', 'both']),
+    max_members: z.coerce.number().int().min(0),
     price_amount: z.coerce.number().min(0, t('Please enter amount')),
     duration_unit: z.enum(['year', 'month', 'day', 'hour', 'custom']),
     duration_value: z.coerce.number().min(1),
@@ -57,6 +59,8 @@ export type PlanFormValues = z.infer<ReturnType<typeof getPlanFormSchema>>
 
 export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   title: '',
+  audience: 'both',
+  max_members: 0,
   subtitle: '',
   price_amount: 0,
   duration_unit: 'month',
@@ -80,6 +84,8 @@ export const PLAN_FORM_DEFAULTS: PlanFormValues = {
 export function planToFormValues(plan: SubscriptionPlan): PlanFormValues {
   return {
     title: plan.title || '',
+    audience: plan.audience || 'both',
+    max_members: plan.max_members || 0,
     subtitle: plan.subtitle || '',
     price_amount: Number(plan.price_amount || 0),
     duration_unit: plan.duration_unit || 'month',

@@ -16,9 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute } from '@tanstack/react-router'
+import { Navigate, createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 
+import { useOrganization } from '@/features/organizations/context'
 import { Wallet } from '@/features/wallet'
 
 const walletSearchSchema = z.object({
@@ -32,5 +33,11 @@ export const Route = createFileRoute('/_authenticated/wallet/')({
 
 function RouteComponent() {
   const { show_history } = Route.useSearch()
+  const context = useOrganization()
+  if (!context.capabilities.org['org.billing']?.read) {
+    return (
+      <Navigate to='/organization/$section' params={{ section: 'billing' }} />
+    )
+  }
   return <Wallet initialShowHistory={show_history} />
 }

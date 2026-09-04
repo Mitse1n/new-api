@@ -327,6 +327,7 @@ func Register(c *gin.Context) {
 		}
 		// 生成默认令牌
 		token := model.Token{
+			OrgId:              insertedUser.PersonalOrgId,
 			UserId:             insertedUser.Id, // 使用插入后的用户ID
 			Name:               cleanUser.Username + "的初始令牌",
 			Key:                key,
@@ -340,7 +341,7 @@ func Register(c *gin.Context) {
 		if setting.DefaultUseAutoGroup {
 			token.Group = "auto"
 		}
-		if err := token.Insert(); err != nil {
+		if err := model.InsertOrganizationToken(&token); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgCreateDefaultTokenErr)
 			return
 		}
@@ -668,7 +669,11 @@ func GetUserModels(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserUsableGroups(user.Group)
+	effectiveGroup := user.Group
+	if c.GetInt("org_id") > 0 {
+		effectiveGroup = c.GetString("group")
+	}
+	groups := service.GetUserUsableGroups(effectiveGroup)
 	group := c.Query("group")
 	var groupsToQuery []string
 	switch {
@@ -678,17 +683,29 @@ func GetUserModels(c *gin.Context) {
 		}
 	case group == "auto":
 		if _, ok := groups[group]; ok {
-			groupsToQuery = service.GetUserAutoGroup(user.Group)
+			groupsToQuery = service.GetUserAutoGroup(effectiveGroup)
 		}
 	default:
 		if _, ok := groups[group]; ok {
 			groupsToQuery = []string{group}
 		}
 	}
+	models := service.GetGroupsEnabledModels(groupsToQuery)
+	if c.GetBool("token_model_limit_enabled") {
+		limits, _ := c.Get("token_model_limit")
+		allowed, _ := limits.(map[string]bool)
+		filtered := make([]string, 0, len(models))
+		for _, name := range models {
+			if allowed[name] {
+				filtered = append(filtered, name)
+			}
+		}
+		models = filtered
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    service.GetGroupsEnabledModels(groupsToQuery),
+		"data":    models,
 	})
 }
 
@@ -1409,7 +1426,7 @@ func TopUp(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	quota, err := model.Redeem(req.Key, id)
+	quota, err := model.Redeem(req.Key, id, c.GetInt("org_id"))
 	if err != nil {
 		// 不向用户暴露兑换失败的细分原因，避免攻击者根据错误类型判断兑换码状态。
 		common.ApiErrorI18n(c, i18n.MsgRedeemFailed)

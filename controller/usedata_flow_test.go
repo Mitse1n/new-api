@@ -25,7 +25,7 @@ func setupFlowControllerTestDB(t *testing.T) {
 	require.NoError(t, model.DB.Create(&model.Token{Id: 11, UserId: 1, Key: "sk-primary", Name: "primary"}).Error)
 	require.NoError(t, model.DB.Create(&model.Token{Id: 22, UserId: 2, Key: "sk-backup", Name: "backup"}).Error)
 	require.NoError(t, model.DB.Create(&model.QuotaData{
-		UserID:    1,
+		OrgId: 1, UserID: 1,
 		Username:  "alice",
 		NodeName:  "node-a",
 		TokenID:   11,
@@ -38,7 +38,7 @@ func setupFlowControllerTestDB(t *testing.T) {
 		TokenUsed: 40,
 	}).Error)
 	require.NoError(t, model.DB.Create(&model.QuotaData{
-		UserID:    2,
+		OrgId: 2, UserID: 2,
 		Username:  "bob",
 		NodeName:  "node-b",
 		TokenID:   22,
@@ -105,6 +105,8 @@ func TestGetUserFlowQuotaDatesRestrictsToAuthenticatedUser(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set("id", 1)
+	ctx.Set("org_id", 1)
+	ctx.Set("org_role", model.OrgRoleMember)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/flow/self?start_timestamp=1000&end_timestamp=2000", nil)
 
 	GetUserFlowQuotaDates(ctx)
@@ -123,6 +125,8 @@ func TestGetUserFlowQuotaDatesRejectsInvalidTimeRange(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set("id", 1)
+	ctx.Set("org_id", 1)
+	ctx.Set("org_role", model.OrgRoleMember)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/flow/self?start_timestamp=bad&end_timestamp=2000", nil)
 
 	GetUserFlowQuotaDates(ctx)

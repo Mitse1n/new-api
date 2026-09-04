@@ -57,6 +57,7 @@ func sanitizeClickHouseLikePattern(input string) (string, error) {
 }
 
 type Log struct {
+	OrgId             int    `json:"org_id" gorm:"index:idx_org_log,priority:1"`
 	Id                int    `json:"id" gorm:"index:idx_created_at_id,priority:2;index:idx_user_id_id,priority:2"`
 	UserId            int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
 	CreatedAt         int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type"`
@@ -99,6 +100,13 @@ func ensureLogRequestId(log *Log) {
 }
 
 func createLog(log *Log) error {
+	if log.OrgId == 0 && log.UserId > 0 {
+		var user User
+		if err := DB.Unscoped().Select("personal_org_id").Where("id = ?", log.UserId).Limit(1).Find(&user).Error; err != nil {
+			return err
+		}
+		log.OrgId = user.PersonalOrgId
+	}
 	ensureLogRequestId(log)
 	return LOG_DB.Create(log).Error
 }
@@ -137,6 +145,14 @@ func FormatRootLogs(logs []*Log) {
 	}
 }
 
+// Organization operators can inspect usage and public channel names, but
+// platform-only diagnostics and secrets remain outside their authority.
+func FormatOrganizationLogs(logs []*Log) {
+	for _, log := range logs {
+		log.Other = formatLogOtherJSON(log.Other, logOtherVisibilityUser)
+	}
+}
+
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	order := "id desc"
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
@@ -147,7 +163,7 @@ func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	return logs, err
 }
 
-func RecordLog(userId int, logType int, content string) {
+func RecordLog(userId int, logType int, content string, orgIDs ...int) {
 	if logType == LogTypeConsume && !common.LogConsumeEnabled {
 		return
 	}
@@ -158,6 +174,9 @@ func RecordLog(userId int, logType int, content string) {
 		CreatedAt: common.GetTimestamp(),
 		Type:      logType,
 		Content:   content,
+	}
+	if len(orgIDs) > 0 {
+		log.OrgId = orgIDs[0]
 	}
 	err := createLog(log)
 	if err != nil {
@@ -249,7 +268,7 @@ func RecordOperationAuditLog(logUserId int, content string, ip string, action st
 	}
 }
 
-func RecordTopupLog(userId int, content string, callerIp string, paymentMethod string, callbackPaymentMethod string) {
+func RecordTopupLog(userId int, content string, callerIp string, paymentMethod string, callbackPaymentMethod string, orgIDs ...int) {
 	username, _ := GetUsernameById(userId, false)
 	other := NewLogOther()
 	other.MergeAdmin(map[string]interface{}{
@@ -268,6 +287,9 @@ func RecordTopupLog(userId int, content string, callerIp string, paymentMethod s
 		Content:   content,
 		Ip:        callerIp,
 		Other:     other.JSONString(),
+	}
+	if len(orgIDs) > 0 {
+		log.OrgId = orgIDs[0]
 	}
 	err := createLog(log)
 	if err != nil {
@@ -290,6 +312,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		}
 	}
 	log := &Log{
+		OrgId:            c.GetInt("org_id"),
 		UserId:           userId,
 		Username:         username,
 		CreatedAt:        common.GetTimestamp(),
@@ -354,6 +377,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		}
 	}
 	log := &Log{
+		OrgId:            c.GetInt("org_id"),
 		UserId:           userId,
 		Username:         username,
 		CreatedAt:        createdAt,
@@ -385,6 +409,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	}
 	if common.DataExportEnabled {
 		LogQuotaData(QuotaDataLogParams{
+			OrgId:     c.GetInt("org_id"),
 			UserID:    userId,
 			Username:  username,
 			ModelName: params.ModelName,
@@ -400,6 +425,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 }
 
 type RecordTaskBillingLogParams struct {
+	OrgId     int
 	UserId    int
 	LogType   int
 	Content   string
@@ -425,6 +451,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 	createdAt := common.GetTimestamp()
 	log := &Log{
+		OrgId:     params.OrgId,
 		UserId:    params.UserId,
 		Username:  username,
 		CreatedAt: createdAt,
@@ -448,6 +475,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 			nodeName = common.NodeName
 		}
 		LogQuotaData(QuotaDataLogParams{
+			OrgId:     params.OrgId,
 			UserID:    params.UserId,
 			Username:  username,
 			ModelName: params.ModelName,
@@ -461,7 +489,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string, scopes ...func(*gorm.DB) *gorm.DB) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -469,6 +497,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		tx = LOG_DB.Where("logs.type = ?", logType)
 	}
 
+	tx = tx.Scopes(scopes...)
 	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {
 		return nil, 0, err
 	}
@@ -611,11 +640,11 @@ type Stat struct {
 	Tpm   int `json:"tpm"`
 }
 
-func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
-	tx := LOG_DB.Table("logs").Select("COALESCE(sum(quota), 0) quota")
+func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string, scopes ...func(*gorm.DB) *gorm.DB) (stat Stat, err error) {
+	tx := LOG_DB.Scopes(scopes...).Table("logs").Select("COALESCE(sum(quota), 0) quota")
 
 	// 为rpm和tpm创建单独的查询
-	rpmTpmQuery := LOG_DB.Table("logs").Select("count(*) rpm, COALESCE(sum(prompt_tokens), 0) + COALESCE(sum(completion_tokens), 0) tpm")
+	rpmTpmQuery := LOG_DB.Scopes(scopes...).Table("logs").Select("count(*) rpm, COALESCE(sum(prompt_tokens), 0) + COALESCE(sum(completion_tokens), 0) tpm")
 
 	if tx, err = applyExplicitLogTextFilter(tx, "username", username); err != nil {
 		return stat, err

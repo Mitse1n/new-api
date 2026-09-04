@@ -27,12 +27,13 @@ import { Button } from '@/components/ui/button'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useSummaryCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import type { QuotaDataItem } from '@/features/dashboard/types'
+import { getOrganizationSummary } from '@/features/organizations/api'
+import { useOrganization } from '@/features/organizations/context'
 import { useStatus } from '@/hooks/use-status'
 import { getCurrencyLabel, isCurrencyDisplayEnabled } from '@/lib/currency'
 import { formatNumber, formatQuota } from '@/lib/format'
 import { computeTimeRange } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth-store'
 
 import { StatCard } from '../ui/stat-card'
 
@@ -138,13 +139,17 @@ const HEALTH_CONFIG: Record<
 
 export function SummaryCards() {
   const { t } = useTranslation()
-  const user = useAuthStore((state) => state.auth.user)
   const { status, loading } = useStatus()
 
   const summaryTimeRange = useMemo(() => computeTimeRange(1), [])
-  const remainQuota = Number(user?.quota ?? 0)
-  const usedQuota = Number(user?.used_quota ?? 0)
-  const requestCount = Number(user?.request_count ?? 0)
+  const organization = useOrganization()
+  const orgSummary = useQuery({
+    queryKey: ['organization-summary', organization.organization.id],
+    queryFn: getOrganizationSummary,
+  })
+  const remainQuota = Number(orgSummary.data?.available_quota ?? 0)
+  const usedQuota = Number(orgSummary.data?.used_quota ?? 0)
+  const requestCount = Number(orgSummary.data?.request_count ?? 0)
 
   const usageTrendQuery = useQuery({
     queryKey: [

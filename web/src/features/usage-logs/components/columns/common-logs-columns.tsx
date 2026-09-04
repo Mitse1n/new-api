@@ -39,6 +39,7 @@ import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useOrganizationStore } from '@/stores/organization-store'
 
 import { LOG_TYPE_ALL_VALUE } from '../../constants'
 import type { UsageLog } from '../../data/schema'
@@ -506,6 +507,7 @@ export function useCommonLogsColumns(
               className='flex items-center gap-1.5 text-left'
               onClick={(e) => {
                 e.stopPropagation()
+                if (!useOrganizationStore.getState().platform) return
                 setSelectedUserId(log.user_id)
                 setUserInfoDialogOpen(true)
               }}

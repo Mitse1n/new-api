@@ -42,6 +42,16 @@ func GetSubscriptionPlans(c *gin.Context) {
 	}
 	result := make([]SubscriptionPlanDTO, 0, len(plans))
 	for _, p := range plans {
+		if orgID := c.GetInt("org_id"); orgID > 0 {
+			org, _, err := model.GetOrganizationMembership(orgID, c.GetInt("id"))
+			if err != nil {
+				organizationError(c, err)
+				return
+			}
+			if p.Audience != "" && p.Audience != "both" && (org.Kind == model.OrganizationPersonal && p.Audience != "personal" || org.Kind == model.OrganizationTeam && p.Audience != "org") {
+				continue
+			}
+		}
 		p.NormalizeDefaults()
 		result = append(result, SubscriptionPlanDTO{
 			Plan: p,
@@ -55,16 +65,24 @@ func GetSubscriptionSelf(c *gin.Context) {
 	settingMap, _ := model.GetUserSetting(userId, false)
 	pref := common.NormalizeBillingPreference(settingMap.BillingPreference)
 
-	// Get all subscriptions (including expired)
-	allSubscriptions, err := model.GetAllUserSubscriptions(userId)
-	if err != nil {
-		allSubscriptions = []model.SubscriptionSummary{}
+	var subs []model.UserSubscription
+	if err := model.DB.Scopes(model.OrgScope(c.GetInt("org_id"))).Order("id desc").Find(&subs).Error; err != nil {
+		common.ApiError(c, err)
+		return
 	}
-
-	// Get active subscriptions for backward compatibility
-	activeSubscriptions, err := model.GetAllActiveUserSubscriptions(userId)
-	if err != nil {
-		activeSubscriptions = []model.SubscriptionSummary{}
+	allSubscriptions := make([]model.SubscriptionSummary, 0, len(subs))
+	activeSubscriptions := make([]model.SubscriptionSummary, 0, len(subs))
+	for i := range subs {
+		entry := model.SubscriptionSummary{Subscription: &subs[i]}
+		allSubscriptions = append(allSubscriptions, entry)
+		if subs[i].Status == "active" && subs[i].EndTime > common.GetTimestamp() {
+			activeSubscriptions = append(activeSubscriptions, entry)
+		}
+	}
+	if raw, exists := c.Get("organization"); exists {
+		if org, ok := raw.(*model.Organization); ok && org.Kind == model.OrganizationTeam {
+			pref = "subscription_first"
+		}
 	}
 
 	common.ApiSuccess(c, gin.H{
@@ -75,6 +93,12 @@ func GetSubscriptionSelf(c *gin.Context) {
 }
 
 func UpdateSubscriptionPreference(c *gin.Context) {
+	if raw, exists := c.Get("organization"); exists {
+		if org, ok := raw.(*model.Organization); ok && org.Kind == model.OrganizationTeam {
+			organizationError(c, model.ErrOrganizationInput)
+			return
+		}
+	}
 	userId := c.GetInt("id")
 	var req BillingPreferenceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -109,7 +133,7 @@ func SubscriptionRequestBalancePay(c *gin.Context) {
 		return
 	}
 
-	if err := model.PurchaseSubscriptionWithBalance(userId, req.PlanId); err != nil {
+	if err := model.PurchaseOrganizationSubscriptionWithBalance(c.GetInt("org_id"), userId, req.PlanId); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -176,6 +200,13 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 	}
 	if req.Plan.DurationValue <= 0 && req.Plan.DurationUnit != model.SubscriptionDurationCustom {
 		req.Plan.DurationValue = 1
+	}
+	if req.Plan.MaxMembers < 0 || (req.Plan.Audience != "" && req.Plan.Audience != "personal" && req.Plan.Audience != "org" && req.Plan.Audience != "both") {
+		common.ApiErrorMsg(c, "Invalid plan audience or member limit")
+		return
+	}
+	if req.Plan.Audience == "" {
+		req.Plan.Audience = "both"
 	}
 	if req.Plan.MaxPurchasePerUser < 0 {
 		common.ApiErrorMsg(c, "购买上限不能为负数")
@@ -251,6 +282,13 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 	if req.Plan.DurationValue <= 0 && req.Plan.DurationUnit != model.SubscriptionDurationCustom {
 		req.Plan.DurationValue = 1
 	}
+	if req.Plan.MaxMembers < 0 || (req.Plan.Audience != "" && req.Plan.Audience != "personal" && req.Plan.Audience != "org" && req.Plan.Audience != "both") {
+		common.ApiErrorMsg(c, "Invalid plan audience or member limit")
+		return
+	}
+	if req.Plan.Audience == "" {
+		req.Plan.Audience = "both"
+	}
 	if req.Plan.MaxPurchasePerUser < 0 {
 		common.ApiErrorMsg(c, "购买上限不能为负数")
 		return
@@ -294,6 +332,8 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"stripe_price_id":            req.Plan.StripePriceId,
 			"creem_product_id":           req.Plan.CreemProductId,
 			"waffo_pancake_product_id":   req.Plan.WaffoPancakeProductId,
+			"audience":                   req.Plan.Audience,
+			"max_members":                req.Plan.MaxMembers,
 			"max_purchase_per_user":      req.Plan.MaxPurchasePerUser,
 			"total_amount":               req.Plan.TotalAmount,
 			"upgrade_group":              req.Plan.UpgradeGroup,

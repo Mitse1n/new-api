@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import axios, { type AxiosRequestConfig } from 'axios'
+import axios, { CanceledError, type AxiosRequestConfig } from 'axios'
 import { t } from 'i18next'
 import { toast } from 'sonner'
 
@@ -27,9 +27,13 @@ import {
 } from '@/lib/auth-session'
 import { getServerErrorMessageKey } from '@/lib/server-error-message'
 import { useAuthStore } from '@/stores/auth-store'
+import { useOrganizationStore } from '@/stores/organization-store'
 
 declare module 'axios' {
   export interface AxiosRequestConfig {
+    skipOrganizationContext?: boolean
+    organizationEpoch?: number
+    organizationID?: number | null
     skipBusinessError?: boolean
     skipErrorHandler?: boolean
     disableDuplicate?: boolean
@@ -57,7 +61,8 @@ api.get = ((url: string, config: ApiRequestConfig = {}) => {
 
   const params = config.params ? JSON.stringify(config.params) : '{}'
   const sessionSID = useAuthStore.getState().auth.session?.sid || 'anonymous'
-  const key = `${sessionSID}:${url}?${params}`
+  const scope = useOrganizationStore.getState()
+  const key = `${sessionSID}:${scope.epoch}:${scope.activeOrgID}:${url}?${params}`
   const existingRequest = inFlightGet.get(key)
   if (existingRequest) return existingRequest
 
@@ -79,6 +84,13 @@ function redirectToSignIn(): void {
 
 api.interceptors.response.use(
   (response) => {
+    if (
+      response.config.organizationEpoch !== undefined &&
+      response.config.organizationEpoch !==
+        useOrganizationStore.getState().epoch
+    ) {
+      throw new CanceledError('Organization changed')
+    }
     if (response.config.acceptAuthRotation && response.data?.success === true) {
       applyAuthRotation(response.data.data)
     }
@@ -99,6 +111,30 @@ api.interceptors.response.use(
   },
   async (error) => {
     const config = error?.config as ApiRequestConfig | undefined
+    if (axios.isCancel(error)) throw error
+    if (
+      config?.organizationEpoch !== undefined &&
+      config.organizationEpoch !== useOrganizationStore.getState().epoch
+    ) {
+      throw new CanceledError('Organization changed')
+    }
+    if (
+      error?.response?.status === 403 &&
+      error?.response?.data?.code === 'ORG_UNAVAILABLE'
+    ) {
+      useOrganizationStore.getState().select(null)
+      toast.error(
+        t('Organization unavailable. Returning to your personal organization.')
+      )
+      throw new CanceledError('Organization unavailable')
+    }
+    if (
+      error?.response?.status === 403 &&
+      error?.response?.data?.code === 'ORG_FORBIDDEN'
+    ) {
+      const current = useOrganizationStore.getState()
+      current.select(current.activeOrgID, current.platform)
+    }
     const skipErrorHandler = config?.skipErrorHandler
     const status = error?.response?.status
 
@@ -141,10 +177,32 @@ api.interceptors.response.use(
   }
 )
 
-api.interceptors.request.use((config) => {
-  const accessToken = useAuthStore.getState().auth.accessToken
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`
-  }
-  return config
-})
+api.interceptors.request.use(
+  (config) => {
+    const path = config.url ?? ''
+    const scoped =
+      /^\/api\/(org\/|pricing$|token(?:\/|$)|user\/|subscription\/|log\/self|data\/(?:flow\/)?self|mj\/self|task\/)/.test(
+        path
+      ) || path.startsWith('/pg/')
+    if (scoped && !config.skipOrganizationContext) {
+      const scope = useOrganizationStore.getState()
+      if (config.organizationEpoch === undefined) {
+        config.organizationEpoch = scope.epoch
+        config.organizationID = scope.activeOrgID
+      }
+      if (config.organizationEpoch !== scope.epoch) {
+        throw new CanceledError('Organization changed')
+      }
+      if (config.organizationID) {
+        config.headers['X-Org-Id'] = String(config.organizationID)
+      }
+    }
+    const accessToken = useAuthStore.getState().auth.accessToken
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`
+    }
+    return config
+  },
+  undefined,
+  { synchronous: true }
+)

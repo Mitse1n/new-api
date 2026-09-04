@@ -35,7 +35,7 @@ var (
 )
 
 func GetTask(c *gin.Context) {
-	task, exists, err := model.GetByTaskId(c.GetInt("id"), c.Param("key"))
+	task, exists, err := model.GetOrganizationTask(organizationUsageScope(c), c.Param("key"))
 	if err != nil {
 		videoProxyError(c, http.StatusInternalServerError, "server_error", "Failed to query task")
 		return
@@ -64,7 +64,7 @@ func GetTask(c *gin.Context) {
 }
 
 func GetTaskArtifacts(c *gin.Context) {
-	task, exists, err := model.GetByTaskId(c.GetInt("id"), c.Param("key"))
+	task, exists, err := model.GetOrganizationTask(organizationUsageScope(c), c.Param("key"))
 	if err != nil {
 		writeTaskArtifactError(c, http.StatusInternalServerError, "artifact_internal_error", "Failed to query task")
 		return
@@ -240,12 +240,15 @@ func getTaskForArtifactRequest(c *gin.Context, taskID string) (*model.Task, bool
 		if err != nil || owner == nil || owner.Status != common.UserStatusEnabled {
 			return nil, false, err
 		}
+		if task.OrgId > 0 {
+			var org model.Organization
+			if err := model.DB.Select("id").Where("id = ? AND status = ?", task.OrgId, model.OrganizationActive).First(&org).Error; err != nil {
+				return nil, false, nil
+			}
+		}
 		return task, true, nil
 	}
-	if c.GetInt("token_id") == 0 && c.GetInt("role") >= common.RoleAdminUser {
-		return model.GetByOnlyTaskId(taskID)
-	}
-	return model.GetByTaskId(c.GetInt("id"), taskID)
+	return model.GetOrganizationTask(organizationUsageScope(c), taskID)
 }
 
 func writeTaskArtifactProjectionError(c *gin.Context, err error) {
@@ -388,8 +391,8 @@ func GetUserTask(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	queryParams := model.SyncTaskQueryParams{Platform: constant.TaskPlatform(c.Query("platform")), TaskID: c.Query("task_id"), Status: c.Query("status"), Action: c.Query("action"), StartTimestamp: startTimestamp, EndTimestamp: endTimestamp}
-	items := model.TaskGetAllUserTask(userID, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
-	pageInfo.SetTotal(int(model.TaskCountAllUserTask(userID, queryParams)))
+	items := model.TaskGetAllUserTask(userID, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams, organizationUsageScope(c))
+	pageInfo.SetTotal(int(model.TaskCountAllUserTask(userID, queryParams, organizationUsageScope(c))))
 	pageInfo.SetItems(tasksToDto(items, false, common.RoleCommonUser))
 	common.ApiSuccess(c, pageInfo)
 }

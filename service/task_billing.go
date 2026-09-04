@@ -217,13 +217,26 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) bool 
 	}
 
 	// 1. 退还资金来源（钱包或订阅）
-	if err := taskAdjustFunding(task, -quota); err != nil {
+	var fundingErr error
+	if task.OrgId > 0 {
+		var delta int
+		delta, fundingErr = model.SettleOrganizationTaskQuota(task, 0)
+		if fundingErr == nil && delta == 0 {
+			return true
+		}
+		quota = -delta
+	} else {
+		fundingErr = taskAdjustFunding(task, -quota)
+	}
+	if err := fundingErr; err != nil {
 		logger.LogWarn(ctx, fmt.Sprintf("退还资金来源失败 task %s: %s", task.TaskID, err.Error()))
 		return false
 	}
 
 	// 2. 退还令牌额度
-	taskAdjustTokenQuota(ctx, task, -quota)
+	if task.OrgId == 0 {
+		taskAdjustTokenQuota(ctx, task, -quota)
+	}
 
 	// 3. 回减预扣时累计的用户和渠道用量，请求次数保持不变
 	model.UpdateUserUsedQuota(task.UserId, -quota)
@@ -234,6 +247,7 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) bool 
 	other.SetPublic("task_id", task.TaskID)
 	other.SetPublic("reason", reason)
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
+		OrgId:     task.OrgId,
 		UserId:    task.UserId,
 		LogType:   model.LogTypeRefund,
 		Content:   "",
@@ -280,13 +294,24 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	))
 
 	// 调整资金来源
-	if err := taskAdjustFunding(task, quotaDelta); err != nil {
+	var fundingErr error
+	if task.OrgId > 0 {
+		quotaDelta, fundingErr = model.SettleOrganizationTaskQuota(task, actualQuota)
+		if fundingErr == nil && quotaDelta == 0 {
+			return
+		}
+	} else {
+		fundingErr = taskAdjustFunding(task, quotaDelta)
+	}
+	if err := fundingErr; err != nil {
 		logger.LogError(ctx, fmt.Sprintf("差额结算资金调整失败 task %s: %s", task.TaskID, err.Error()))
 		return
 	}
 
 	// 调整令牌额度
-	taskAdjustTokenQuota(ctx, task, quotaDelta)
+	if task.OrgId == 0 {
+		taskAdjustTokenQuota(ctx, task, quotaDelta)
+	}
 
 	task.Quota = actualQuota
 	if err := task.UpdateQuota(); err != nil {
@@ -314,6 +339,7 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 		attachQuotaSaturationToOther(other, clamp)
 	}
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
+		OrgId:     task.OrgId,
 		UserId:    task.UserId,
 		LogType:   logType,
 		Content:   reason,

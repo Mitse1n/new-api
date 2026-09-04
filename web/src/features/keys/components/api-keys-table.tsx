@@ -55,7 +55,7 @@ import {
 import type { ApiKey } from '../types'
 import { ApiKeyCell, UnlimitedQuotaBadge } from './api-keys-cells'
 import { useApiKeysColumns } from './api-keys-columns'
-import { useApiKeys } from './api-keys-provider'
+import { useApiKeys } from './api-keys-context'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 import { DataTableRowActions } from './data-table-row-actions'
 
@@ -310,8 +310,9 @@ export function ApiKeysTable() {
         searchDebounceMs: 500,
         additionalSearch: (
           <Input
-            placeholder={t('Filter by API key...')}
-            aria-label={t('Filter by API key...')}
+            placeholder={t('Creator')}
+            inputMode='numeric'
+            aria-label={t('Creator')}
             value={tokenFilterInput}
             onChange={(e) => setTokenFilterInput(e.target.value)}
             className='w-full sm:w-50 lg:w-60'

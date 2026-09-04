@@ -17,6 +17,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 const serverErrorMessageKeys = {
+  ORG_SLUG: 'This organization slug is already in use.',
+  ORG_MEMBER_EXISTS: 'This user is already a member of this organization.',
+  ORG_INVITE_PENDING:
+    'An invitation is already pending. Resend it from the invitation list.',
+  ORG_INTERNAL: 'Request failed',
+  ORG_UNAVAILABLE:
+    'Organization unavailable. Returning to your personal organization.',
+  ORG_FORBIDDEN: 'You do not have permission for this action.',
+  ORG_INVALID: 'Invalid organization details',
+  ORG_INVITE: 'Invitation unavailable or identity does not match',
+  ORG_SEATS: 'Organization member limit reached',
+  ORG_OWNER: 'Ownership operation is not allowed',
+  ORG_UNSETTLED:
+    'Settle the balance and active subscriptions before deleting this organization.',
+  ORG_QUOTA: 'Organization quota insufficient',
+  ORG_MEMBER_LIMIT: 'Member spending limit reached',
+
   AUTH_SESSION_LIMIT:
     'Too many active login sessions. On a device where you are already signed in, open Login sessions and use “Sign out other sessions” to revoke them. If you cannot access a signed-in device, reset your password to sign out all sessions.',
   AUTH_SESSION_ISSUANCE_LIMIT:

@@ -477,6 +477,65 @@ export function SubscriptionsMutateDrawer({
 
                 <FormField
                   control={form.control}
+                  name='audience'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Plan audience')}</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value='both'>
+                              {t('Personal and team organizations')}
+                            </SelectItem>
+                            <SelectItem value='personal'>
+                              {t('Personal organizations')}
+                            </SelectItem>
+                            <SelectItem value='org'>
+                              {t('Team organizations')}
+                            </SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name='max_members'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Member limit')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type='number'
+                          min='0'
+                          step='1'
+                          onChange={(event) =>
+                            field.onChange(Number(event.target.value))
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Active members and pending invitations count toward this limit. Zero means unlimited.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name='max_purchase_per_user'
                   render={({ field }) => (
                     <FormItem>

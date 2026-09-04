@@ -222,6 +222,9 @@ func TestKlingNativeRouteSubmitPollSettleAndQuery(t *testing.T) {
 
 	queryBinding, found := generation.LookupDeclaredRoute(http.MethodGet, "/kling/v1/videos/text2video/:task_id")
 	require.True(t, found)
+	// The legacy billing fixture settles before its task is assigned to the
+	// personal organization, as in an upgrade from the released schema.
+	require.NoError(t, database.Model(&model.Task{}).Where("task_id = ?", "task_kling_public").Update("org_id", 7).Error)
 	queryRecorder := httptest.NewRecorder()
 	queryContext, _ := gin.CreateTestContext(queryRecorder)
 	queryContext.Request = httptest.NewRequest(http.MethodGet, "/kling/v1/videos/text2video/task_kling_public", nil)
@@ -232,6 +235,7 @@ func TestKlingNativeRouteSubmitPollSettleAndQuery(t *testing.T) {
 		Route:      queryBinding.Route,
 	})
 	common.SetContextKey(queryContext, constant.ContextKeyUserId, 7)
+	common.SetContextKey(queryContext, constant.ContextKeyOrgId, 7)
 
 	middleware.PrepareTaskPluginRoute()(queryContext)
 

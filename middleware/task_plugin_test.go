@@ -964,6 +964,7 @@ export function parseTaskResult() { return {status: "SUCCESS"}; }
 		pinTaskPluginRoute(plugin, 0),
 		func(c *gin.Context) {
 			c.Set("id", 7)
+			c.Set("org_id", 7)
 			c.Next()
 		},
 		PrepareTaskPluginRoute(),
@@ -1070,6 +1071,7 @@ export const native = {status: function(ctx, task) { return {id: task.task_id}; 
 		pinTaskPluginRoute(plugin, 0),
 		func(c *gin.Context) {
 			c.Set("id", 7)
+			c.Set("org_id", 7)
 			c.Next()
 		},
 		PrepareTaskPluginRoute(),
@@ -1695,6 +1697,7 @@ func setupTaskPluginRouteDB(t *testing.T) {
 }
 
 func insertTaskPluginRouteTask(t *testing.T, task *model.Task) {
+	task.OrgId = task.UserId
 	t.Helper()
 	require.NoError(t, model.DB.Create(task).Error)
 }

@@ -38,6 +38,9 @@ func Can(userID int, systemRole int, permission Permission) bool {
 func Capabilities(userID int, systemRole int) PermissionsMap {
 	result := make(PermissionsMap, len(registry))
 	for _, resource := range registry {
+		if resource.Scope == "org" {
+			continue
+		}
 		actions := make(map[string]bool, len(resource.Actions))
 		for _, action := range resource.Actions {
 			actions[action.Action] = Can(userID, systemRole, Permission{
@@ -56,7 +59,7 @@ func roleBaselineAllows(e *casbin.SyncedEnforcer, roleKey string, permission Per
 }
 
 func explicitSubjectEffect(e *casbin.SyncedEnforcer, subject string, permission Permission) (string, bool) {
-	policies, err := e.GetFilteredPolicy(0, subject, permission.Resource, permission.Action)
+	policies, err := e.GetFilteredPolicy(0, subject, "*", permission.Resource, permission.Action)
 	if err != nil {
 		return "", false
 	}
@@ -76,8 +79,8 @@ func explicitSubjectEffect(e *casbin.SyncedEnforcer, subject string, permission 
 }
 
 func policyEffect(policy []string) string {
-	if len(policy) < 4 || policy[3] == "" {
+	if len(policy) < 5 || policy[4] == "" {
 		return EffectAllow
 	}
-	return policy[3]
+	return policy[4]
 }

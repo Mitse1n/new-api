@@ -20,6 +20,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
+import { getOrganizationSummary } from '@/features/organizations/api'
+import { OrganizationSummary } from '@/features/organizations/components/OrganizationSummary'
+import { useOrganization } from '@/features/organizations/context'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
@@ -61,6 +64,20 @@ interface WalletProps {
 
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
+  const context = useOrganization()
+  if (!context.capabilities.org['org.billing']?.write) {
+    return (
+      <div className='p-5'>
+        {t('Only organization owners and administrators can manage payments.')}
+      </div>
+    )
+  }
+  return <OrganizationWallet {...props} />
+}
+
+function OrganizationWallet(props: WalletProps) {
+  const { t } = useTranslation()
+  const context = useOrganization()
   const [user, setUser] = useState<UserWalletData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [topupAmount, setTopupAmount] = useState(0)
@@ -113,9 +130,17 @@ export function Wallet(props: WalletProps) {
   const fetchUser = useCallback(async () => {
     try {
       setUserLoading(true)
-      const response = await getSelf()
+      const [response, summary] = await Promise.all([
+        getSelf(),
+        getOrganizationSummary(),
+      ])
       if (response.success && response.data) {
-        setUser(response.data as UserWalletData)
+        setUser({
+          ...response.data,
+          quota: summary.quota,
+          used_quota: summary.used_quota,
+          group: summary.group,
+        } as UserWalletData)
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -288,6 +313,7 @@ export function Wallet(props: WalletProps) {
         <SectionPageLayout.Title>{t('Wallet')}</SectionPageLayout.Title>
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
+            <OrganizationSummary />
             <WalletStatsCard user={user} loading={userLoading} />
 
             <div
@@ -339,15 +365,17 @@ export function Wallet(props: WalletProps) {
               />
             </div>
 
-            <AffiliateRewardsCard
-              user={user}
-              affiliateLink={affiliateLink}
-              onTransfer={() => setTransferDialogOpen(true)}
-              complianceConfirmed={
-                topupInfo?.payment_compliance_confirmed !== false
-              }
-              loading={affiliateLoading}
-            />
+            {context.organization.kind === 'personal' && (
+              <AffiliateRewardsCard
+                user={user}
+                affiliateLink={affiliateLink}
+                onTransfer={() => setTransferDialogOpen(true)}
+                complianceConfirmed={
+                  topupInfo?.payment_compliance_confirmed !== false
+                }
+                loading={affiliateLoading}
+              />
+            )}
           </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>

@@ -31,7 +31,7 @@ func setupGenericTaskTest(t *testing.T) *model.Task {
 	common.RedisEnabled = false
 	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, database.AutoMigrate(&model.Task{}, &model.Channel{}, &model.User{}))
+	require.NoError(t, database.AutoMigrate(&model.Task{}, &model.Channel{}, &model.User{}, &model.Organization{}))
 	model.DB = database
 	t.Cleanup(func() {
 		model.DB = originalDB
@@ -42,12 +42,13 @@ func setupGenericTaskTest(t *testing.T) *model.Task {
 		Id: 7, Username: "artifact-owner", Status: common.UserStatusEnabled,
 		Role: common.RoleCommonUser, Group: "default",
 	}).Error)
+	require.NoError(t, database.Create(&model.Organization{Id: 7, Name: "Artifact team", Slug: "artifact-team", Status: model.OrganizationActive}).Error)
 	baseURL := "https://example.com"
 	require.NoError(t, database.Create(&model.Channel{
 		Id: 1, Name: "artifact", Key: "key", BaseURL: &baseURL, Status: common.ChannelStatusEnabled,
 	}).Error)
 	task := &model.Task{
-		TaskID: "task_generic", Platform: "document", UserId: 7, ChannelId: 1,
+		OrgId: 7, TaskID: "task_generic", Platform: "document", UserId: 7, ChannelId: 1,
 		Status: model.TaskStatusSuccess, Progress: "100%", SubmitTime: 10, FinishTime: 20,
 	}
 	require.NoError(t, database.Create(task).Error)
@@ -78,6 +79,7 @@ func TestGetTaskDoesNotProjectArtifacts(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Set("id", 7)
+	c.Set("org_id", 7)
 	c.Params = gin.Params{{Key: "key", Value: task.TaskID}}
 	c.Request = httptest.NewRequest(http.MethodGet, "/v1/tasks/"+task.TaskID, nil)
 
@@ -96,6 +98,7 @@ func TestGetTaskArtifactsReturnsEmptyForLegacyTask(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Set("id", task.UserId)
+	c.Set("org_id", task.OrgId)
 	c.Params = gin.Params{{Key: "key", Value: task.TaskID}}
 	c.Request = httptest.NewRequest(http.MethodGet, "/v1/tasks/"+task.TaskID+"/artifacts", nil)
 
@@ -117,6 +120,7 @@ func TestTaskArtifactAuthorizationKeepsForeignTasksHidden(t *testing.T) {
 
 	commonUser, _ := gin.CreateTestContext(httptest.NewRecorder())
 	commonUser.Set("id", 8)
+	commonUser.Set("org_id", 8)
 	commonUser.Set("role", common.RoleCommonUser)
 	_, exists, err := getTaskForArtifactRequest(commonUser, task.TaskID)
 	require.NoError(t, err)
@@ -124,11 +128,11 @@ func TestTaskArtifactAuthorizationKeepsForeignTasksHidden(t *testing.T) {
 
 	admin, _ := gin.CreateTestContext(httptest.NewRecorder())
 	admin.Set("id", 8)
+	admin.Set("org_id", 8)
 	admin.Set("role", common.RoleAdminUser)
-	found, exists, err := getTaskForArtifactRequest(admin, task.TaskID)
+	_, exists, err = getTaskForArtifactRequest(admin, task.TaskID)
 	require.NoError(t, err)
-	require.True(t, exists)
-	assert.Equal(t, task.TaskID, found.TaskID)
+	assert.False(t, exists, "platform roles cannot bypass an ordinary organization endpoint")
 
 	apiToken, _ := gin.CreateTestContext(httptest.NewRecorder())
 	apiToken.Set("id", 8)
@@ -156,6 +160,7 @@ func TestDashboardTaskArtifactsReturnsLegacyCapabilityWithoutUpstreamURL(t *test
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Set("id", task.UserId)
+	c.Set("org_id", task.OrgId)
 	c.Set("role", common.RoleCommonUser)
 	c.Params = gin.Params{{Key: "task_id", Value: task.TaskID}}
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/task/"+task.TaskID+"/artifacts", nil)

@@ -16,11 +16,13 @@ import (
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 	"github.com/thanhpk/randstr"
 	waffo "github.com/waffo-com/waffo-go"
 	"github.com/waffo-com/waffo-go/config"
 	"github.com/waffo-com/waffo-go/core"
 	"github.com/waffo-com/waffo-go/types/order"
+	"gorm.io/gorm"
 )
 
 func getWaffoSDK() (*waffo.Waffo, error) {
@@ -128,7 +130,7 @@ func RequestWaffoAmount(c *gin.Context) {
 		return
 	}
 
-	group, err := model.GetUserGroup(id, true)
+	group, err := getTopUpBillingGroup(c)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "获取用户分组失败"})
 		return
@@ -203,7 +205,7 @@ func RequestWaffoPay(c *gin.Context) {
 	}
 	// resolvedPayMethodType/Name 为空时，Waffo 自动选择支付方式
 
-	group, _ := model.GetUserGroup(id, true)
+	group, _ := getTopUpBillingGroup(c)
 	payMoney := getWaffoPayMoney(float64(req.Amount), group)
 	if payMoney < 0.01 {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "充值金额过低"})
@@ -225,6 +227,7 @@ func RequestWaffoPay(c *gin.Context) {
 
 	// 创建本地订单
 	topUp := &model.TopUp{
+		OrgId:           c.GetInt("org_id"),
 		UserId:          id,
 		Amount:          amount,
 		Money:           payMoney,
@@ -395,6 +398,44 @@ func WaffoWebhook(c *gin.Context) {
 
 // handleWaffoPayment 处理支付完成通知
 func handleWaffoPayment(c *gin.Context, wh *core.WebhookHandler, result *core.PaymentNotificationResult) {
+	var purchase model.SubscriptionOrder
+	lookup := model.DB.Where("trade_no = ?", result.MerchantOrderID).First(&purchase)
+	if lookup.Error != nil && !errors.Is(lookup.Error, gorm.ErrRecordNotFound) {
+		sendWaffoWebhookResponse(c, wh, false, "order lookup failed")
+		return
+	}
+	if lookup.Error == nil {
+		if purchase.PaymentProvider != model.PaymentProviderWaffo {
+			sendWaffoWebhookResponse(c, wh, false, "payment provider mismatch")
+			return
+		}
+		if result.OrderStatus != "PAY_SUCCESS" {
+			if result.OrderStatus == "PAY_FAILED" || result.OrderStatus == "PAY_CLOSED" {
+				if err := model.DB.Model(&model.SubscriptionOrder{}).Where("id = ? AND status = ?", purchase.Id, common.TopUpStatusPending).Update("status", common.TopUpStatusFailed).Error; err != nil {
+					sendWaffoWebhookResponse(c, wh, false, "order update failed")
+					return
+				}
+			}
+			sendWaffoWebhookResponse(c, wh, true, "")
+			return
+		}
+		amount, err := decimal.NewFromString(result.OrderAmount)
+		if err != nil || result.OrderCurrency != "USD" || !amount.Equal(decimal.NewFromFloat(purchase.Money).Round(2)) {
+			sendWaffoWebhookResponse(c, wh, false, "payment amount mismatch")
+			return
+		}
+		payload, err := common.Marshal(result)
+		if err == nil {
+			err = model.CompleteSubscriptionOrder(purchase.TradeNo, string(payload), model.PaymentProviderWaffo, model.PaymentMethodWaffo)
+		}
+		if err != nil {
+			sendWaffoWebhookResponse(c, wh, false, "subscription completion failed")
+			return
+		}
+		sendWaffoWebhookResponse(c, wh, true, "")
+		return
+	}
+
 	if result.OrderStatus != "PAY_SUCCESS" {
 		logger.LogInfo(c.Request.Context(), fmt.Sprintf("Waffo 订单状态非成功，忽略充值 trade_no=%s order_status=%s client_ip=%s", result.MerchantOrderID, result.OrderStatus, c.ClientIP()))
 		// 终态失败订单标记为 failed，避免永远停在 pending

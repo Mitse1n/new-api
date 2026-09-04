@@ -85,7 +85,7 @@ func createRootAccountIfNeed() error {
 			AccessToken: nil,
 			Quota:       100000000,
 		}
-		DB.Create(&rootUser)
+		return CreateUserWithPersonalOrganization(&rootUser)
 	}
 	return nil
 }
@@ -329,6 +329,12 @@ func migrateDB() error {
 	}
 
 	err := DB.AutoMigrate(
+		&Organization{},
+		&OrganizationMember{},
+		&OrganizationInvite{},
+		&OrganizationTransfer{},
+		&OrganizationAudit{},
+		&OrganizationCharge{}, &OrganizationNotification{},
 		&Channel{},
 		&Token{},
 		&User{},
@@ -383,19 +389,31 @@ func migrateDB() error {
 			return err
 		}
 	}
-	return nil
+	return MigratePersonalOrganizations(DB)
 }
 
 func migrateLOGDB() error {
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return migrateClickHouseLogDB()
 	}
-	return LOG_DB.AutoMigrate(&Log{})
+	if err := LOG_DB.AutoMigrate(&Log{}); err != nil {
+		return err
+	}
+	return BackfillLogOrganizations(DB, LOG_DB)
 }
 
 func migrateClickHouseLogDB() error {
 	ttlDays := clickHouseLogTTLDays()
 	if err := LOG_DB.Exec(clickHouseLogCreateTableSQL(ttlDays)).Error; err != nil {
+		return err
+	}
+	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS org_id Int64 DEFAULT 0").Error; err != nil {
+		return err
+	}
+	if err := BackfillClickHouseLogOrganizations(DB, LOG_DB); err != nil {
+		return err
+	}
+	if err := migrateClickHouseOrganizationOrder(ttlDays); err != nil {
 		return err
 	}
 	return syncClickHouseLogTTL(ttlDays)
@@ -428,6 +446,7 @@ func clickHouseLogCreateTableSQL(ttlDays int) string {
 	return fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS logs (
 	id Int64 DEFAULT 0,
+	org_id Int64 DEFAULT 0,
 	user_id Int32 DEFAULT 0,
 	created_at Int64 DEFAULT 0,
 	type Int32 DEFAULT 0,
@@ -450,7 +469,7 @@ CREATE TABLE IF NOT EXISTS logs (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(toDateTime(created_at))
-ORDER BY (created_at, request_id)%s`, clickHouseLogTTLClause(ttlDays))
+ORDER BY (org_id, created_at, request_id)%s`, clickHouseLogTTLClause(ttlDays))
 }
 
 func syncClickHouseLogTTL(ttlDays int) error {
@@ -495,6 +514,8 @@ func ensureSubscriptionPlanTableSQLite() error {
 	if !DB.Migrator().HasTable(tableName) {
 		createSQL := `CREATE TABLE ` + "`" + tableName + "`" + ` (
 ` + "`id`" + ` integer,
+` + "`audience`" + ` varchar(16) DEFAULT 'both',
+` + "`max_members`" + ` integer DEFAULT 0,
 ` + "`title`" + ` varchar(128) NOT NULL,
 ` + "`subtitle`" + ` varchar(255) DEFAULT '',
 ` + "`price_amount`" + ` decimal(10,6) NOT NULL,
@@ -532,6 +553,8 @@ PRIMARY KEY (` + "`id`" + `)
 		existing[c.Name] = struct{}{}
 	}
 	required := []sqliteColumnDef{
+		{Name: "audience", DDL: "`audience` varchar(16) DEFAULT 'both'"},
+		{Name: "max_members", DDL: "`max_members` integer DEFAULT 0"},
 		{Name: "title", DDL: "`title` varchar(128) NOT NULL"},
 		{Name: "subtitle", DDL: "`subtitle` varchar(255) DEFAULT ''"},
 		{Name: "price_amount", DDL: "`price_amount` decimal(10,6) NOT NULL"},

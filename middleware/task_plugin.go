@@ -1141,7 +1141,7 @@ func renderTaskPluginQuery(
 	)
 	userID := common.GetContextKeyInt(c, constant.ContextKeyUserId)
 	platforms := taskPluginLegacyPlatforms(pinned.Plugin.Meta)
-	tasks, err := model.GetByTaskIdsForPlatforms(userID, platforms, taskIDs)
+	tasks, err := model.GetByTaskIdsForPlatforms(userID, platforms, taskIDs, c.GetInt("org_id"))
 	if err != nil {
 		logger.LogDebug(
 			c,

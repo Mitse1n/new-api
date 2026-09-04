@@ -17,6 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api, type ApiRequestConfig } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth-store'
+import { useOrganizationStore } from '@/stores/organization-store'
 
 import { buildQueryParams } from './lib/query-params'
 import { parseTaskArtifactsResponse } from './lib/task-artifacts'
@@ -36,6 +38,10 @@ import type {
 // ============================================================================
 
 function buildApiPath(endpoint: string, isAdmin: boolean): string {
+  const state = useOrganizationStore.getState()
+  if (state.context && !state.platform) {
+    return endpoint === '/api/log' ? '/api/org/logs' : `${endpoint}/self`
+  }
   return isAdmin ? endpoint : `${endpoint}/self`
 }
 
@@ -44,7 +50,11 @@ async function fetchLogs<T>(
   params: T,
   isAdmin: boolean
 ): Promise<GetLogsResponse> {
+  const state = useOrganizationStore.getState()
   const paramRecord = params as unknown as Record<string, unknown>
+  if (state.context && !state.platform && !isAdmin) {
+    paramRecord.user_id = useAuthStore.getState().auth.user?.id
+  }
   const queryParams = buildQueryParams({
     p: paramRecord.p || 1,
     page_size: paramRecord.page_size || 20,
@@ -60,9 +70,12 @@ async function fetchLogStats<T>(
   params: T,
   isAdmin: boolean
 ): Promise<GetLogStatsResponse> {
-  const queryParams = buildQueryParams(
-    params as unknown as Record<string, unknown>
-  )
+  const paramRecord = params as unknown as Record<string, unknown>
+  const state = useOrganizationStore.getState()
+  if (state.context && !state.platform && !isAdmin) {
+    paramRecord.user_id = useAuthStore.getState().auth.user?.id
+  }
+  const queryParams = buildQueryParams(paramRecord)
   const path = buildApiPath(endpoint, isAdmin)
   const res = await api.get(`${path}/stat?${queryParams}`)
   return res.data

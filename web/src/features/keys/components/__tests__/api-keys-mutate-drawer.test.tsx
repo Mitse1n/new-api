@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, test } from 'vitest'
 
+import { useOrganizationStore } from '@/stores/organization-store'
+
 const { createInstance } = await import('i18next')
 const { I18nextProvider, initReactI18next } = await import('react-i18next')
 const { QueryClient, QueryClientProvider } =
@@ -85,6 +87,42 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
 }
 
 async function renderCreateDrawer(): Promise<void> {
+  useOrganizationStore.setState({
+    userID: 1,
+    activeOrgID: 1,
+    context: {
+      pending_transfer: false,
+      organization: {
+        id: 1,
+        name: 'Test organization',
+        slug: 'test',
+        kind: 'personal',
+        status: 1,
+        owner_id: 1,
+        group: 'default',
+        quota: 1000,
+        used_quota: 0,
+        version: 1,
+        budget_period_start: 0,
+        budget_period_end: 0,
+      },
+      membership: {
+        id: 1,
+        org_id: 1,
+        user_id: 1,
+        role: 'owner',
+        spend_limit: 0,
+        status: 1,
+        username: 'test',
+        display_name: 'Test',
+        email: '',
+      },
+      capabilities: {
+        platform: {},
+        org: { 'org.token': { write: true, read: true } },
+      },
+    },
+  })
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -226,6 +264,11 @@ describe('API keys mutate drawer Auto group integration', () => {
     changeInput(getControlByLabel('Name'), 'batch')
     changeInput(getControlByLabel('Quantity'), '2')
     fireEvent.click(findButton('Save changes', true))
+    await waitFor(() =>
+      expect(findButton('Create API Key', false)).toBeEnabled()
+    )
+    expect(createdPayloads).toHaveLength(0)
+    fireEvent.click(findButton('Create API Key', true))
     await waitFor(() => expect(createdPayloads).toHaveLength(2))
 
     expect(createdPayloads.length).toBe(2)
@@ -274,6 +317,10 @@ describe('API keys mutate drawer Auto group integration', () => {
 
     changeInput(getControlByLabel('Name'), 'custom')
     fireEvent.click(findButton('Save changes', true))
+    await waitFor(() =>
+      expect(findButton('Create API Key', false)).toBeEnabled()
+    )
+    fireEvent.click(findButton('Create API Key', true))
     await waitFor(() => expect(createdPayloads).toHaveLength(1))
     expect(createdPayloads[0]?.auto_groups).toEqual(['vip'])
   })

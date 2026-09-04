@@ -108,8 +108,12 @@ func newRule(ptype string, policy []string) model.CasbinRule {
 func ruleToLine(rule model.CasbinRule) string {
 	parts := []string{rule.Ptype}
 	values := []string{rule.V0, rule.V1, rule.V2, rule.V3, rule.V4, rule.V5}
-	if rule.Ptype == "p" && rule.V0 != "" && rule.V1 != "" && rule.V2 != "" && rule.V3 == "" {
-		values[3] = EffectAllow
+	if rule.Ptype == "p" && rule.V4 == "" {
+		effect := rule.V3
+		if effect == "" {
+			effect = EffectAllow
+		}
+		values = []string{rule.V0, "*", rule.V1, rule.V2, effect}
 	}
 	for _, value := range values {
 		if value == "" {
