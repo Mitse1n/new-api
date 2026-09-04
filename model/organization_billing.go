@@ -86,9 +86,9 @@ func reserveOrganizationCharge(orgID, userID, tokenID int, requestID string, amo
 			}
 		}
 		var member OrganizationMember
-		// A key remains an organization asset after its creator leaves. The
-		// historical membership still supplies its budget attribution.
-		if err := tx.Scopes(OrgScope(orgID)).Where("user_id = ?", userID).First(&member).Error; err != nil {
+		// New reservations require active membership; settlement/refunds for
+		// existing requests use their persisted receipts independently.
+		if err := tx.Scopes(OrgScope(orgID)).Where("user_id = ? AND status = ?", userID, OrganizationActive).First(&member).Error; err != nil {
 			return ErrOrganizationAccess
 		}
 		now := common.GetTimestamp()

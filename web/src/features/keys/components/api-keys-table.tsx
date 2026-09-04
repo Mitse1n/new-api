@@ -28,7 +28,6 @@ import {
   DISABLED_ROW_DESKTOP,
   DISABLED_ROW_MOBILE,
   DataTablePage,
-  useDebouncedColumnFilter,
   useDataTable,
 } from '@/components/data-table'
 import { StatusBadge } from '@/components/status-badge'
@@ -39,7 +38,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { formatQuota } from '@/lib/format'
@@ -213,22 +211,10 @@ export function ApiKeysTable() {
     navigate: route.useNavigate(),
     pagination: { defaultPage: 1, defaultPageSize: 20 },
     globalFilter: { enabled: true, key: 'filter' },
-    columnFilters: [
-      { columnId: 'status', searchKey: 'status', type: 'array' },
-      { columnId: '_tokenSearch', searchKey: 'token', type: 'string' },
-    ],
+    columnFilters: [{ columnId: 'status', searchKey: 'status', type: 'array' }],
   })
 
-  const {
-    value: tokenFilter,
-    inputValue: tokenFilterInput,
-    setInputValue: setTokenFilterInput,
-  } = useDebouncedColumnFilter({
-    columnFilters,
-    columnId: '_tokenSearch',
-    onColumnFiltersChange,
-  })
-  const shouldSearch = Boolean(globalFilter?.trim() || tokenFilter.trim())
+  const shouldSearch = Boolean(globalFilter?.trim())
 
   // Fetch data with React Query
   // eslint-disable-next-line @tanstack/query/exhaustive-deps
@@ -238,14 +224,12 @@ export function ApiKeysTable() {
       pagination.pageIndex + 1,
       pagination.pageSize,
       globalFilter,
-      tokenFilter,
       refreshTrigger,
     ],
     queryFn: async () => {
       const result = shouldSearch
         ? await searchApiKeys({
             keyword: globalFilter,
-            token: tokenFilter,
             p: pagination.pageIndex + 1,
             size: pagination.pageSize,
           })
@@ -308,16 +292,6 @@ export function ApiKeysTable() {
       toolbarProps={{
         searchPlaceholder: t('Filter by name...'),
         searchDebounceMs: 500,
-        additionalSearch: (
-          <Input
-            placeholder={t('Creator')}
-            inputMode='numeric'
-            aria-label={t('Creator')}
-            value={tokenFilterInput}
-            onChange={(e) => setTokenFilterInput(e.target.value)}
-            className='w-full sm:w-50 lg:w-60'
-          />
-        ),
         filters: [
           {
             columnId: 'status',

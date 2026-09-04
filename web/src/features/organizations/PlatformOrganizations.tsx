@@ -40,7 +40,6 @@ import type { Organization, Page } from './types'
 
 const resourceColumns = {
   members: ['user_id', 'role', 'status', 'spend_limit'],
-  tokens: ['name', 'user_id', 'key', 'status', 'used_quota'],
   logs: ['created_at', 'user_id', 'model_name', 'quota', 'request_id'],
   orders: ['trade_no', 'plan_id', 'user_id', 'money', 'status'],
   subscriptions: ['id', 'plan_id', 'amount_total', 'amount_used', 'status'],
@@ -112,7 +111,6 @@ export function PlatformOrganizations() {
   })
   const labels: Record<string, string> = {
     members: t('Members'),
-    tokens: t('API Keys'),
     logs: t('Usage Logs'),
     orders: t('Orders'),
     subscriptions: t('Subscriptions'),

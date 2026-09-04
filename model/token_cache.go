@@ -10,7 +10,7 @@ import (
 )
 
 func getTokenCacheKey(key string) string {
-	return fmt.Sprintf("token:org-v1:%s", common.GenerateHMAC(key))
+	return fmt.Sprintf("token:org-v2:%s", common.GenerateHMAC(key))
 }
 
 func getTokenCacheFenceKey(key string) string {

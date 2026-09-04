@@ -198,7 +198,7 @@ export function MemberDialog(props: {
                     </NativeSelect>
                     <FieldDescription>
                       {t(
-                        'Existing API keys remain organization assets when a member leaves.'
+                        'Disabling or removing a member disables their organization API keys. Historical usage is retained.'
                       )}
                     </FieldDescription>
                   </Field>

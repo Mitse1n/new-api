@@ -49,6 +49,8 @@ func TestOrganizationAPIsEnforceScopeAndFreshMembership(t *testing.T) {
 	}, middleware.OrganizationContext())
 	r.GET("/tokens", middleware.RequireOrgPermission("org.token", "read"), GetAllTokens)
 	r.GET("/tokens/:id", middleware.RequireOrgPermission("org.token", "read"), GetToken)
+	r.PUT("/tokens", middleware.RequireOrgPermission("org.token", "write"), UpdateToken)
+	r.DELETE("/tokens/:id", middleware.RequireOrgPermission("org.token", "write"), DeleteToken)
 	r.POST("/tokens/batch", middleware.RequireOrgPermission("org.token", "write"), DeleteTokenBatch)
 	r.GET("/logs", middleware.RequireOrgPermission("org.usage", "read"), GetOrganizationLogs)
 	r.GET("/task/:key", middleware.RequireOrgPermission("org.usage", "read"), GetTask)
@@ -58,7 +60,10 @@ func TestOrganizationAPIsEnforceScopeAndFreshMembership(t *testing.T) {
 		status          int
 		visible, hidden string
 	}{
-		{1, "10", "/tokens", 200, "alpha-member", "beta-private"},
+		{1, "10", "/tokens", 200, "alpha-owned", "alpha-member"},
+		{1, "10", "/tokens?user_id=2", 200, "alpha-owned", "alpha-member"},
+		{1, "10", "/tokens/" + strconv.Itoa(keys[1].Id), 200, "false", "alpha-member"},
+		{1, "10", "/logs", 200, "alpha-member-log", "beta-private-log"},
 		{2, "10", "/tokens?user_id=1", 200, "alpha-member", "alpha-owned"},
 		{1, "20", "/tokens", 403, "ORG_UNAVAILABLE", "beta-private"},
 		{1, "999", "/tokens", 403, "ORG_UNAVAILABLE", "Beta"},
@@ -81,6 +86,28 @@ func TestOrganizationAPIsEnforceScopeAndFreshMembership(t *testing.T) {
 				assert.NotContains(t, response.Body.String(), key.Key)
 			}
 		})
+	}
+	// A platform root identity still cannot manage another creator's keys,
+	// whether its organization role is owner or admin.
+	for _, role := range []string{model.OrgRoleOwner, model.OrgRoleAdmin} {
+		require.NoError(t, db.Model(&model.OrganizationMember{}).Where("org_id = ? AND user_id = ?", 10, 1).Update("role", role).Error)
+		for _, operation := range []struct{ method, path, body string }{
+			{http.MethodGet, "/tokens/" + strconv.Itoa(keys[1].Id), ""},
+			{http.MethodPut, "/tokens?status_only=true", fmt.Sprintf(`{"id":%d,"status":2}`, keys[1].Id)},
+			{http.MethodDelete, "/tokens/" + strconv.Itoa(keys[1].Id), ""},
+			{http.MethodPost, "/tokens/batch", fmt.Sprintf(`{"ids":[%d,%d]}`, keys[0].Id, keys[1].Id)},
+		} {
+			request := httptest.NewRequest(operation.method, operation.path, bytes.NewBufferString(operation.body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Test-User", "1")
+			request.Header.Set("X-Org-Id", "10")
+			response := httptest.NewRecorder()
+			r.ServeHTTP(response, request)
+			assert.Contains(t, response.Body.String(), `"success":false`, role+operation.method)
+		}
+		var unchanged model.Token
+		require.NoError(t, db.First(&unchanged, keys[1].Id).Error)
+		assert.Equal(t, keys[1].Status, unchanged.Status)
 	}
 	batch, _ := common.Marshal(map[string]interface{}{"ids": []int{keys[0].Id, keys[2].Id}})
 	request := httptest.NewRequest(http.MethodPost, "/tokens/batch", bytes.NewReader(batch))

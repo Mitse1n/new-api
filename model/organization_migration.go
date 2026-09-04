@@ -18,7 +18,7 @@ func MigratePersonalOrganizations(db *gorm.DB) error {
 			return err
 		}
 		if len(users) == 0 {
-			return nil
+			return DisableInactiveOrganizationTokens(db)
 		}
 		for i := range users {
 			user := &users[i]

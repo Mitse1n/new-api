@@ -25,7 +25,7 @@ func TestOrganizationCachedTokenNeedsNoOrganizationLookupAndInvalidatesOnDisable
 		require.NoError(t, common.RDB.Ping(context.Background()).Err())
 		t.Cleanup(func() { require.NoError(t, common.RDB.Close()); common.RDB, common.RedisEnabled = oldRDB, oldEnabled })
 	}
-	token := Token{OrgId: org.Id, OrgGroup: "default", OrgStatus: OrganizationActive, OrgSettings: `{"allowed_models":["gpt-4o-mini"]}`, UserId: users[0].Id, Key: "organization-cache-fixture", Status: common.TokenStatusEnabled, ExpiredTime: -1, UnlimitedQuota: true}
+	token := Token{OrgId: org.Id, OrgGroup: "default", OrgStatus: OrganizationActive, OrgSettings: `{"allowed_models":["gpt-4o-mini"]}`, UserId: users[1].Id, Key: "organization-cache-fixture", Status: common.TokenStatusEnabled, ExpiredTime: -1, UnlimitedQuota: true}
 	require.NoError(t, db.Create(&token).Error)
 	cacheKeys := []string{getTokenCacheKey(token.Key), getTokenCacheFenceKey(token.Key)}
 	require.NoError(t, common.RDB.Del(context.Background(), cacheKeys...).Err())
@@ -44,6 +44,12 @@ func TestOrganizationCachedTokenNeedsNoOrganizationLookupAndInvalidatesOnDisable
 	refreshed, err := GetTokenByKey(token.Key, false)
 	require.NoError(t, err)
 	assert.Equal(t, OrganizationDisabled, refreshed.OrgStatus)
+	require.NoError(t, ChangeOrganizationStatus(org.Id, users[0].Id, OrganizationActive, ""))
+	_, err = ValidateUserToken(token.Key)
+	require.NoError(t, err)
+	require.NoError(t, UpdateOrganizationMember(org.Id, users[0].Id, users[1].Id, OrgRoleMember, OrganizationDisabled, 200))
+	_, err = ValidateUserToken(token.Key)
+	assert.ErrorIs(t, err, ErrTokenInvalid, "member revocation must invalidate a warm relay token cache")
 }
 
 func TestOrganizationPersonalWalletFallsBackWhenRedisIsUnavailable(t *testing.T) {

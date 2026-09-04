@@ -262,6 +262,11 @@ func UpdateOrganizationMember(orgID, actorID, userID int, role string, status in
 				return ErrOrganizationSeats
 			}
 		}
+		if status != OrganizationActive {
+			if err := DisableOrganizationMemberTokensTx(tx, orgID, userID); err != nil {
+				return err
+			}
+		}
 		if err := tx.Model(&member).Updates(map[string]interface{}{"role": role, "status": status, "spend_limit": spendLimit}).Error; err != nil {
 			return err
 		}

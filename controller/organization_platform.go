@@ -45,8 +45,6 @@ func PlatformOrganizationResources(c *gin.Context) {
 	switch c.Param("resource") {
 	case "members":
 		resource = &[]model.OrganizationMember{}
-	case "tokens":
-		resource = &[]model.Token{}
 	case "orders":
 		resource = &[]model.SubscriptionOrder{}
 	case "subscriptions":
@@ -71,13 +69,6 @@ func PlatformOrganizationResources(c *gin.Context) {
 		return
 	}
 	var items interface{} = resource
-	if tokens, ok := resource.(*[]model.Token); ok {
-		masked := make([]interface{}, 0, len(*tokens))
-		for i := range *tokens {
-			masked = append(masked, buildMaskedTokenResponse(&(*tokens)[i]))
-		}
-		items = masked
-	}
 	if orders, ok := resource.(*[]model.SubscriptionOrder); ok {
 		for i := range *orders {
 			(*orders)[i].ProviderPayload = ""

@@ -799,10 +799,14 @@ export function ApiKeysMutateDrawer({
           onOpenChange={(value) => {
             if (!value) setPendingCreate(null)
           }}
-          title={t('Confirm organization')}
-          desc={t('Create API keys for {{name}}?', {
-            name: organization.organization.name,
-          })}
+          title={t('Create API Key')}
+          desc={
+            organization.organization.kind === 'personal'
+              ? t('Create an API key for yourself using your personal balance?')
+              : t('Create an API key for yourself using {{name}} quota?', {
+                  name: organization.organization.name,
+                })
+          }
           confirmText={t('Create API Key')}
           handleConfirm={() => {
             if (pendingCreate) {

@@ -20,9 +20,9 @@
 | 组织与迁移 | 用户注册、存量用户自动创建唯一个人组织；钱包使用 bigint；回填 Key、订单、充值、订阅、任务、日志、用量归属；重复启动不重复复制余额 |
 | 组织上下文 | 顶栏切换和搜索，组织设置中创建组织；按登录用户保存选中组织；切换清理缓存和表单；延迟响应不能污染新组织页面；提交中的请求固定原组织 |
 | 权限 | Casbin domain、平台策略迁移、组织能力矩阵；普通接口拒绝无效或非成员组织；平台跨组织入口独立 |
-| 成员 | 用户名站内邀请、通知中心接受/拒绝、过期、重发、撤销、账号匹配、席位校验、角色调整、停用/移除；移除后 Key 作为组织资产保留 |
-| Key | 组织与创建者双重归属；Owner/Admin 全组织、Member 仅自己；一次性 Secret、掩码列表、批量操作与创建者列 |
-| 用量 | 组织概览、模型/成员/Key 聚合、日志筛选、任务与制品隔离；普通成员只能读自己的明细；支持独立日志库与 ClickHouse |
+| 成员 | 用户名站内邀请、通知中心接受/拒绝、过期、重发、撤销、账号匹配、席位校验、角色调整、停用/移除；停用/移除后禁用其组织 Key，历史用量与费用保留 |
+| Key | 组织与创建者双重归属；所有角色仅管理自己的 Key；一次性 Secret、掩码列表、批量操作；移除创建者列和按创建者筛选 |
+| 用量 | 组织概览、模型/成员用量与费用聚合、日志筛选、任务与制品隔离；普通成员只能读自己的明细；支持独立日志库与 ClickHouse |
 | 采购 | Audience、成员席位、组织档位、订阅额度、钱包溢出；余额购买及现有五类在线支付接入；订单持久化组织和套餐快照；幂等回调、档位到期恢复、订单历史 |
 | 计费 | 订阅优先、钱包兜底、成员周期上限、Key 硬限额；数据库条件检查和行锁；预扣、增量预留、结算、退款与异步任务调整保留原组织和原资金来源 |
 | 预算告警 | 按周期和收件对象去重；Owner/Admin、告警邮箱、Webhook；持久化队列、租约与重试 |
@@ -141,3 +141,29 @@ TENANCY_VERIFY_STARTUP=1 /tmp/new-api-inapp-startup
 ```
 
 前端 19 项组织相关测试、类型检查、涉及文件 lint 和生产构建通过。本地独立 SQLite 应用完成真实 HTTP 联调：初始化管理员、注册无邮箱账号、按用户名邀请、通知列表账号隔离、错误账号拒绝、拒绝后重新邀请、接受并查询成员关系、重复接受幂等；创建响应不含 token 或链接。
+
+## 个人密钥与组织付费（2026-09-04）
+
+所有角色只能查看和管理自己在当前组织内创建的 API Key，组织钱包仍统一结算。Owner/Admin 保留成员用量、模型、费用和预算管理。创建提示明确“为自己创建，使用组织额度”。
+
+停用/移除成员会在同一事务中禁用其组织 Key，并失效缓存；其他组织和个人 Key 不受影响。恢复成员后需本人显式启用旧 Key 或创建新 Key。已预扣请求继续结算/退款，历史记录保留。启动对旧数据执行同样的非活跃成员 Key 清理，并升级 Token 缓存命名空间；此升级不新增表或字段。
+
+升级前备份数据库，停止旧实例并统一切换版本。若回滚到此前的组织资产语义，恢复升级前数据库备份及匹配的旧镜像，并使用独立空 Redis 库；不要与新版本混跑。
+
+本次验证：SQLite 3.50.4、MySQL 5.7.44、PostgreSQL 9.6.24、Redis 7.2.16。三种数据库均通过全部 `TestOrganization` 行为测试（包含成员撤销、恢复、历史结算、启动清理），并分别完成全新库和实际发布版 `v1.0.0-rc.30 / 27ff6a87` 夹具升级的两次启动校验。余额、资源归属、历史日志和唯一索引均保留。命令如下；所有 DSN 必须指向可删除的独立测试库：
+
+```sh
+go test ./model ./controller ./service/authz -run 'TestOrganization|TestGetAllTokens|TestGetToken|TestSearchTokens|TestUpdateToken' -count=1
+TENANCY_TEST_MYSQL_DSN="$MYSQL_TEST_DSN" go test ./model -run TestOrganization -count=1
+TENANCY_TEST_POSTGRES_DSN="$POSTGRES_TEST_DSN" go test ./model -run TestOrganization -count=1
+TENANCY_TEST_REDIS_ADDR=127.0.0.1:16379 go test ./model -run TestOrganizationCachedToken -count=1
+go build -o /tmp/new-api-private-keys-startup ./tools/multi-tenancy-verify
+# 每种数据库各建 fresh 和 upgrade 独立库；upgrade 库先运行已发布版本的 release-fixture。
+TENANCY_VERIFY_STARTUP=1 SQL_DSN="$TEST_DSN" SQLITE_PATH="$TEST_SQLITE_PATH" /tmp/new-api-private-keys-startup
+cd web
+bun run typecheck
+NODE_OPTIONS=--no-experimental-webstorage bun run test src/features/keys src/features/organizations src/features/usage-logs/__tests__/platform-scope.test.ts
+bun run build
+```
+
+真实 Redis 测试验证热缓存撤销；前端 51 项测试、类型检查、涉及文件 lint 和生产构建通过。本地独立应用的真实 HTTP 联调覆盖 Owner/Admin/Member 各自密钥列表、伪造成员筛选、详情/修改/删除/混合批量越权拒绝、平台密钥列表关闭、用量查询保留、停用后 relay 认证返回 401、恢复成员后需创建者显式启用。

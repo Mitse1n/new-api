@@ -2,6 +2,8 @@ package model
 
 import (
 	"fmt"
+
+	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
 )
 
@@ -55,17 +57,24 @@ func (scope OrganizationResourceScope) Apply(db *gorm.DB) *gorm.DB {
 	return db
 }
 
-func GetOrganizationToken(scope OrganizationResourceScope, id int) (*Token, error) {
+// OrganizationTokenScope always binds a key to its creator, regardless of role.
+type OrganizationTokenScope struct {
+	OrgID  int
+	UserID int
+}
+
+func (scope OrganizationTokenScope) Apply(db *gorm.DB) *gorm.DB {
+	return db.Scopes(OrgScope(scope.OrgID)).Where("user_id = ?", scope.UserID)
+}
+
+func GetOrganizationToken(scope OrganizationTokenScope, id int) (*Token, error) {
 	var token Token
 	err := DB.Scopes(scope.Apply).Where("id = ?", id).First(&token).Error
 	return &token, err
 }
 
-func ListOrganizationTokens(scope OrganizationResourceScope, keyword string, userID, offset, limit int) ([]*Token, int64, error) {
+func ListOrganizationTokens(scope OrganizationTokenScope, keyword string, offset, limit int) ([]*Token, int64, error) {
 	query := DB.Model(&Token{}).Scopes(scope.Apply)
-	if scope.AllMembers && userID > 0 {
-		query = query.Where("user_id = ?", userID)
-	}
 	if keyword != "" {
 		pattern, err := sanitizeLikePattern(keyword)
 		if err != nil {
@@ -88,7 +97,7 @@ func ListOrganizationTokens(scope OrganizationResourceScope, keyword string, use
 	return tokens, total, err
 }
 
-func DeleteOrganizationTokens(scope OrganizationResourceScope, ids []int) (int64, error) {
+func DeleteOrganizationTokens(scope OrganizationTokenScope, ids []int) (int64, error) {
 	if len(ids) == 0 || len(ids) > 100 {
 		return 0, ErrOrganizationInput
 	}
@@ -123,7 +132,7 @@ func DeleteOrganizationTokens(scope OrganizationResourceScope, ids []int) (int64
 	return count, err
 }
 
-func (scope OrganizationResourceScope) AuthorizeWrite(tx *gorm.DB) error {
+func (scope OrganizationTokenScope) AuthorizeWrite(tx *gorm.DB) error {
 	var org Organization
 	if err := lockForUpdate(tx).Where("id = ? AND status = ?", scope.OrgID, OrganizationActive).First(&org).Error; err != nil {
 		return ErrOrganizationAccess
@@ -132,13 +141,10 @@ func (scope OrganizationResourceScope) AuthorizeWrite(tx *gorm.DB) error {
 	if err := tx.Scopes(OrgScope(org.Id)).Where("user_id = ? AND status = ?", scope.UserID, OrganizationActive).First(&member).Error; err != nil {
 		return ErrOrganizationAccess
 	}
-	if scope.AllMembers && member.Role != OrgRoleOwner && member.Role != OrgRoleAdmin {
-		return ErrOrganizationAccess
-	}
 	return nil
 }
 
-func UpdateOrganizationToken(scope OrganizationResourceScope, token *Token, statusOnly bool) error {
+func UpdateOrganizationToken(scope OrganizationTokenScope, token *Token, statusOnly bool) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		if err := scope.AuthorizeWrite(tx); err != nil {
 			return err
@@ -159,4 +165,51 @@ func UpdateOrganizationToken(scope OrganizationResourceScope, token *Token, stat
 		}
 		return tx.Create(&OrganizationAudit{OrgId: scope.OrgID, ActorId: scope.UserID, Action: "token.update", ObjectId: fmt.Sprint(token.Id), Result: "success"}).Error
 	})
+}
+
+// DisableOrganizationMemberTokensTx revokes all keys of a member before a
+// governance transaction commits. Re-enabling membership never revives keys.
+func DisableOrganizationMemberTokensTx(tx *gorm.DB, orgID, userID int) error {
+	var tokens []Token
+	if err := tx.Scopes(OrgScope(orgID)).Where("user_id = ? AND status <> ?", userID, common.TokenStatusDisabled).Select("id", "key").Find(&tokens).Error; err != nil {
+		return err
+	}
+	return disableOrganizationTokensTx(tx, tokens)
+}
+
+func disableOrganizationTokensTx(tx *gorm.DB, tokens []Token) error {
+	if len(tokens) == 0 {
+		return nil
+	}
+	ids := make([]int, 0, len(tokens))
+	for _, token := range tokens {
+		if err := invalidateTokenCacheForMutation(token.Key); err != nil {
+			return err
+		}
+		ids = append(ids, token.Id)
+	}
+	return tx.Model(&Token{}).Where("id IN ?", ids).Update("status", common.TokenStatusDisabled).Error
+}
+
+// Startup reconciles keys left usable by the previous organization-asset policy.
+// Writes are quiesced; the cache namespace changes with this migration.
+func DisableInactiveOrganizationTokens(db *gorm.DB) error {
+	for {
+		done := false
+		err := db.Transaction(func(tx *gorm.DB) error {
+			active := tx.Model(&OrganizationMember{}).Select("1").Where("organization_members.org_id = tokens.org_id AND organization_members.user_id = tokens.user_id AND organization_members.status = ?", OrganizationActive)
+			var tokens []Token
+			if err := tx.Where("org_id > 0 AND status <> ? AND NOT EXISTS (?)", common.TokenStatusDisabled, active).Order("id").Limit(250).Select("id", "key").Find(&tokens).Error; err != nil {
+				return err
+			}
+			done = len(tokens) == 0
+			return disableOrganizationTokensTx(tx, tokens)
+		})
+		if err != nil {
+			return err
+		}
+		if done {
+			return nil
+		}
+	}
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
@@ -149,18 +148,13 @@ func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) boo
 	return true
 }
 
-func tokenOrganizationScope(c *gin.Context) model.OrganizationResourceScope {
-	action := "read_all"
-	if c.Request.Method != http.MethodGet {
-		action = "write_all"
-	}
-	return model.OrganizationResourceScope{OrgID: c.GetInt("org_id"), UserID: c.GetInt("id"), AllMembers: authz.CanOrg(c.GetInt("id"), c.GetInt("org_id"), c.GetString("org_role"), authz.Permission{Resource: "org.token", Action: action})}
+func tokenOrganizationScope(c *gin.Context) model.OrganizationTokenScope {
+	return model.OrganizationTokenScope{OrgID: c.GetInt("org_id"), UserID: c.GetInt("id")}
 }
 
 func GetAllTokens(c *gin.Context) {
 	page := common.GetPageQuery(c)
-	userID, _ := strconv.Atoi(c.Query("user_id"))
-	tokens, total, err := model.ListOrganizationTokens(tokenOrganizationScope(c), c.Query("keyword"), userID, page.GetStartIdx(), page.GetPageSize())
+	tokens, total, err := model.ListOrganizationTokens(tokenOrganizationScope(c), c.Query("keyword"), page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return

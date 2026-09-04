@@ -22,6 +22,12 @@ func TestOrganizationPermissionsKeepRolesAndDomainsSeparate(t *testing.T) {
 		{model.OrgRoleMember, "org.billing", "write", false},
 		{model.OrgRoleMember, "org.token", "write", true},
 		{model.OrgRoleMember, "org.token", "write_all", false},
+		{model.OrgRoleOwner, "org.token", "read_all", false},
+		{model.OrgRoleOwner, "org.token", "write_all", false},
+		{model.OrgRoleAdmin, "org.token", "read_all", false},
+		{model.OrgRoleAdmin, "org.token", "write_all", false},
+		{model.OrgRoleOwner, "org.usage", "read_all", true},
+		{model.OrgRoleAdmin, "org.usage", "read_all", true},
 		{"billing", "org.billing", "write", false},
 		{model.OrgRoleOwner, "channel", "read", false},
 	} {
@@ -29,9 +35,12 @@ func TestOrganizationPermissionsKeepRolesAndDomainsSeparate(t *testing.T) {
 			assert.Equal(t, test.allowed, CanOrg(1, 10, test.role, Permission{Resource: test.resource, Action: test.action}))
 		})
 	}
+	_, err := currentEnforcer().AddPolicy("org-role:owner", "*", "org.token", "write_all", EffectAllow)
+	require.NoError(t, err)
+	assert.False(t, CanOrg(1, 10, model.OrgRoleOwner, Permission{Resource: "org.token", Action: "write_all"}), "obsolete persisted grants cannot restore access")
 	permission := Permission{Resource: "org.token", Action: "write"}
 	assert.False(t, CanOrg(1, 0, model.OrgRoleOwner, permission))
-	_, err := currentEnforcer().AddPolicy(UserSubject(1), "org:10", permission.Resource, permission.Action, EffectDeny)
+	_, err = currentEnforcer().AddPolicy(UserSubject(1), "org:10", permission.Resource, permission.Action, EffectDeny)
 	require.NoError(t, err)
 	assert.False(t, CanOrg(1, 10, model.OrgRoleOwner, permission))
 	assert.True(t, CanOrg(1, 11, model.OrgRoleOwner, permission), "a domain override must not affect another organization")

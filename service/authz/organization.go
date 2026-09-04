@@ -38,7 +38,7 @@ func init() {
 		actions  []string
 	}{
 		{"org.member", []string{"read", "write"}},
-		{"org.token", []string{"read", "write", "read_all", "write_all"}},
+		{"org.token", []string{"read", "write"}},
 		{"org.usage", []string{"read", "read_all"}},
 		{"org.billing", []string{"read", "write"}},
 		{"org.subscription", []string{"purchase"}},
