@@ -110,7 +110,7 @@ export function OrganizationSwitcher() {
         {(['personal', 'team'] as const).map((kind) => (
           <div key={kind}>
             <p className='mt-menu-label'>
-              {t(kind === 'personal' ? 'Personal' : 'Team organizations')}
+              {t(kind === 'personal' ? 'Personal' : 'Organization')}
             </p>
             {organizations
               .filter(
