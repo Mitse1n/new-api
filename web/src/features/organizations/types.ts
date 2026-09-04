@@ -62,7 +62,7 @@ export type OrganizationInvite = {
   invitee_id: number
   email?: string
   role: 'admin' | 'member'
-  status: 'pending' | 'accepted' | 'expired' | 'revoked'
+  status: 'pending' | 'accepted' | 'expired' | 'revoked' | 'declined'
   expires_at: number
 }
 export type OrganizationSummary = {
@@ -140,4 +140,13 @@ export type Page<T> = {
   total: number
   page: number
   page_size: number
+}
+
+export type IncomingOrganizationInvite = {
+  id: number
+  org_id: number
+  organization_name: string
+  inviter_username: string
+  role: 'admin' | 'member'
+  expires_at: number
 }

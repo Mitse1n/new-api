@@ -170,6 +170,7 @@ export function Audit() {
     'platform.status': t('Organization status'),
     'member.invite': t('Invite member'),
     'member.accept': t('Accept invitation'),
+    'member.decline': t('Decline invitation'),
     'member.update': t('Edit member'),
     'member.budget': t('Member spending limit'),
     'invite.revoke': t('Revoke invitation'),

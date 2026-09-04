@@ -40,6 +40,8 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { InvitationNotifications } from '@/features/organizations/components/InvitationNotifications'
+import { useIncomingInvitations } from '@/features/organizations/use-incoming-invitations'
 import { getAnnouncementColorClass } from '@/lib/colors'
 import { formatDateTimeObject } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -302,6 +304,8 @@ export function NotificationPopover({
   className,
 }: NotificationPopoverProps) {
   const { t } = useTranslation()
+  const invitations = useIncomingInvitations()
+  const totalUnread = unreadCount + (invitations.data?.length ?? 0)
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger
@@ -315,12 +319,12 @@ export function NotificationPopover({
         }
       >
         <Bell className='size-[1.2rem]' />
-        {unreadCount > 0 ? (
+        {totalUnread > 0 ? (
           <Badge
             variant='destructive'
             className='absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center px-1 text-[10px] font-semibold tabular-nums'
           >
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {totalUnread > 99 ? '99+' : totalUnread}
           </Badge>
         ) : null}
       </PopoverTrigger>
@@ -330,6 +334,17 @@ export function NotificationPopover({
         sideOffset={8}
         className='w-[min(26rem,calc(100vw-1rem))] gap-3 p-3'
       >
+        {!!invitations.data?.length && (
+          <InvitationNotifications
+            invitations={invitations.data}
+            onDone={() => onOpenChange(false)}
+          />
+        )}
+        {invitations.isError && (
+          <Button variant='outline' onClick={() => void invitations.refetch()}>
+            {t('Retry loading invitations')}
+          </Button>
+        )}
         <PopoverHeader className='gap-1 px-1'>
           <PopoverTitle>{t('System Announcements')}</PopoverTitle>
           <p className='text-muted-foreground text-xs'>

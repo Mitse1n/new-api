@@ -43,7 +43,7 @@ const originalAdapter = api.defaults.adapter
 const requests: InternalAxiosRequestConfig[] = []
 let response = {
   success: true,
-  data: { token: 'one-time-invitation' },
+  data: { id: 42 },
   message: '',
 }
 let client: QueryClient
@@ -89,7 +89,7 @@ beforeEach(() => {
   requests.length = 0
   response = {
     success: true,
-    data: { token: 'one-time-invitation' },
+    data: { id: 42 },
     message: '',
   }
   api.defaults.adapter = async (config) => {
@@ -139,35 +139,29 @@ test('an empty invitation username shows a validation error without sending a re
   expect(requests).toHaveLength(0)
 })
 
-test('a successful invitation is scoped to the team and shows its one-time readonly link', async () => {
+test('a successful invitation sends the username to the team and closes without a link', async () => {
   const close = vi.fn()
   renderDialog({ close })
   fireEvent.change(screen.getByRole('textbox', { name: 'Username' }), {
     target: { value: 'new-member' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
-  const link = await screen.findByRole('textbox', { name: 'Invitation link' })
-  expect(link).toHaveAttribute('readonly')
-  expect(link).toHaveValue(
-    new URL(
-      '/organization/invite?token=one-time-invitation',
-      window.location.origin
-    ).toString()
-  )
+  await waitFor(() => expect(close).toHaveBeenCalledOnce())
+  expect(
+    screen.queryByRole('textbox', { name: 'Invitation link' })
+  ).not.toBeInTheDocument()
   expect(requests).toHaveLength(1)
   expect(requests[0].headers['X-Org-Id']).toBe('10')
   expect(JSON.parse(requests[0].data)).toEqual({
     username: 'new-member',
     role: 'member',
   })
-  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-  expect(close).toHaveBeenCalledOnce()
 })
 
 test('a rejected invitation preserves the username and presents the server error for correction', async () => {
   response = {
     success: false,
-    data: { token: '' },
+    data: { id: 0 },
     message: 'Team seat limit reached',
   }
   const close = vi.fn()

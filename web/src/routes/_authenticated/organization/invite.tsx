@@ -16,69 +16,27 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMutation } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { z } from 'zod'
 
 import { SectionPageLayout } from '@/components/layout'
-import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { acceptOrganizationInvite } from '@/features/organizations/api'
-import { useSwitchOrganization } from '@/features/organizations/context'
-import { getServerErrorMessageKey } from '@/lib/server-error-message'
-import { useAuthStore } from '@/stores/auth-store'
 
 export const Route = createFileRoute('/_authenticated/organization/invite')({
-  validateSearch: z.object({ token: z.string().catch('') }),
-  component: AcceptInvite,
+  component: LegacyInvite,
 })
-function AcceptInvite() {
+function LegacyInvite() {
   const { t } = useTranslation()
-  const search = Route.useSearch()
-  const username = useAuthStore((state) => state.auth.user?.username)
-  const switchOrg = useSwitchOrganization()
-  const accept = useMutation({
-    mutationFn: () => acceptOrganizationInvite(search.token),
-    onSuccess: (orgID) => switchOrg(orgID),
-  })
   return (
     <SectionPageLayout>
       <SectionPageLayout.Title>
         {t('Organization invitation')}
       </SectionPageLayout.Title>
       <SectionPageLayout.Content>
-        <Card className='m-4 max-w-xl'>
-          <CardHeader>
-            <CardTitle>{t('Join organization')}</CardTitle>
-            <CardDescription>
-              {t('Sign in with the username that received this invitation.')} ·{' '}
-              {username}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className='flex flex-col gap-4'>
-            {accept.isError && (
-              <p role='alert' className='text-destructive'>
-                {t(
-                  getServerErrorMessageKey(accept.error) ??
-                    'Invitation unavailable. Check your username or ask the organization administrator for a new link.'
-                )}
-              </p>
-            )}
-            <Button
-              disabled={search.token.length !== 64 || accept.isPending}
-              onClick={() => accept.mutate()}
-            >
-              {t('Accept invitation')}
-            </Button>
-          </CardContent>
-        </Card>
+        <p className='p-4'>
+          {t(
+            'Invitation links are no longer used. Ask an administrator to invite your username, then accept in Notifications.'
+          )}
+        </p>
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )

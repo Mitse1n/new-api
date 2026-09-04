@@ -165,24 +165,22 @@ func InviteOrganizationMember(c *gin.Context) {
 		organizationError(c, model.ErrOrganizationInput)
 		return
 	}
-	invite, token, err := model.CreateOrganizationInvite(c.GetInt("org_id"), c.GetInt("id"), input.Username, input.Role)
+	invite, err := model.CreateOrganizationInvite(c.GetInt("org_id"), c.GetInt("id"), input.Username, input.Role)
 	if err != nil {
 		organizationError(c, err)
 		return
 	}
 	c.Header("Cache-Control", "no-store")
-	common.ApiSuccess(c, gin.H{"invite": invite, "token": token})
+	common.ApiSuccess(c, invite)
 }
 
 func AcceptOrganizationInvite(c *gin.Context) {
-	var input struct {
-		Token string `json:"token"`
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
+	inviteID, err := strconv.Atoi(c.Param("invite_id"))
+	if err != nil {
 		organizationError(c, model.ErrOrganizationInvite)
 		return
 	}
-	orgID, err := model.AcceptOrganizationInvite(c.GetInt("id"), input.Token)
+	orgID, err := model.AcceptOrganizationInvite(c.GetInt("id"), inviteID)
 	if err != nil {
 		organizationError(c, err)
 		return
@@ -227,11 +225,32 @@ func ResendOrganizationInvite(c *gin.Context) {
 		organizationError(c, model.ErrOrganizationInput)
 		return
 	}
-	invite, token, err := model.ResendOrganizationInvite(c.GetInt("org_id"), c.GetInt("id"), id)
+	invite, err := model.ResendOrganizationInvite(c.GetInt("org_id"), c.GetInt("id"), id)
 	if err != nil {
 		organizationError(c, err)
 		return
 	}
 	c.Header("Cache-Control", "no-store")
-	common.ApiSuccess(c, gin.H{"invite": invite, "token": token})
+	common.ApiSuccess(c, invite)
+}
+
+func ListIncomingOrganizationInvites(c *gin.Context) {
+	invites, err := model.ListIncomingOrganizationInvites(c.GetInt("id"))
+	if err != nil {
+		organizationError(c, err)
+		return
+	}
+	common.ApiSuccess(c, invites)
+}
+func DeclineOrganizationInvite(c *gin.Context) {
+	inviteID, err := strconv.Atoi(c.Param("invite_id"))
+	if err != nil {
+		organizationError(c, model.ErrOrganizationInvite)
+		return
+	}
+	if err := model.DeclineOrganizationInvite(c.GetInt("id"), inviteID); err != nil {
+		organizationError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
 }

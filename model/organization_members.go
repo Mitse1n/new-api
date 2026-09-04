@@ -82,17 +82,18 @@ func organizationSeatLimit(tx *gorm.DB, orgID int) (int, error) {
 	return max, nil
 }
 
-func CreateOrganizationInvite(orgID, actorID int, username, role string) (*OrganizationInvite, string, error) {
+func CreateOrganizationInvite(orgID, actorID int, username, role string) (*OrganizationInvite, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || utf8.RuneCountInString(username) > 20 || (role != OrgRoleAdmin && role != OrgRoleMember) {
-		return nil, "", ErrOrganizationInput
+		return nil, ErrOrganizationInput
 	}
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	token := hex.EncodeToString(secret)
-	hash := sha256.Sum256([]byte(token))
+	// Retain the historical unique hash column for schema compatibility.
+	// Invitations are now addressed by ID and authorized by the recipient account.
+	hash := sha256.Sum256(secret)
 	invite := OrganizationInvite{OrgId: orgID, Username: username, Role: role, TokenHash: hex.EncodeToString(hash[:]), Status: "pending", InviterId: actorID, ExpiresAt: time.Now().Add(7 * 24 * time.Hour).Unix()}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		org, err := lockOrganizationManager(tx, orgID, actorID, false)
@@ -148,18 +149,17 @@ func CreateOrganizationInvite(orgID, actorID int, username, role string) (*Organ
 		}
 		return tx.Create(&OrganizationAudit{OrgId: orgID, ActorId: actorID, Action: "member.invite", ObjectId: fmt.Sprint(invite.Id), Result: "success"}).Error
 	})
-	return &invite, token, err
+	return &invite, err
 }
 
-func AcceptOrganizationInvite(userID int, token string) (int, error) {
-	if len(token) != 64 {
+func AcceptOrganizationInvite(userID, inviteID int) (int, error) {
+	if inviteID <= 0 {
 		return 0, ErrOrganizationInvite
 	}
-	hash := sha256.Sum256([]byte(token))
 	var acceptedOrgID int
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var invite OrganizationInvite
-		if err := tx.Where("token_hash = ?", hex.EncodeToString(hash[:])).First(&invite).Error; err != nil {
+		if err := tx.Where("id = ? AND invitee_id = ?", inviteID, userID).First(&invite).Error; err != nil {
 			return ErrOrganizationInvite
 		}
 		var org Organization
@@ -287,13 +287,7 @@ func RevokeOrganizationInvite(orgID, actorID, inviteID int) error {
 
 // Resending rotates the hash on the existing invitation, invalidating the old
 // link while retaining a single pending seat and an auditable invitation id.
-func ResendOrganizationInvite(orgID, actorID, inviteID int) (*OrganizationInvite, string, error) {
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		return nil, "", err
-	}
-	token := hex.EncodeToString(secret)
-	hash := sha256.Sum256([]byte(token))
+func ResendOrganizationInvite(orgID, actorID, inviteID int) (*OrganizationInvite, error) {
 	var invite OrganizationInvite
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		if _, err := lockOrganizationManager(tx, orgID, actorID, false); err != nil {
@@ -339,11 +333,61 @@ func ResendOrganizationInvite(orgID, actorID, inviteID int) (*OrganizationInvite
 				return ErrOrganizationInvite
 			}
 		}
-		invite.TokenHash, invite.ExpiresAt = hex.EncodeToString(hash[:]), time.Now().Add(7*24*time.Hour).Unix()
+		invite.ExpiresAt = time.Now().Add(7 * 24 * time.Hour).Unix()
 		if err := tx.Save(&invite).Error; err != nil {
 			return err
 		}
 		return tx.Create(&OrganizationAudit{OrgId: orgID, ActorId: actorID, Action: "invite.resend", ObjectId: fmt.Sprint(invite.Id), Result: "success"}).Error
 	})
-	return &invite, token, err
+	return &invite, err
+}
+
+// Incoming invitations are account-scoped, independently of the selected organization.
+type IncomingOrganizationInvite struct {
+	Id               int    `json:"id"`
+	OrgId            int    `json:"org_id"`
+	OrganizationName string `json:"organization_name"`
+	InviterUsername  string `json:"inviter_username"`
+	Role             string `json:"role"`
+	ExpiresAt        int64  `json:"expires_at"`
+}
+
+func ListIncomingOrganizationInvites(userID int) ([]IncomingOrganizationInvite, error) {
+	invites := make([]IncomingOrganizationInvite, 0)
+	err := DB.Table("organization_invites AS i").
+		Select("i.id, i.org_id, o.name AS organization_name, u.username AS inviter_username, i.role, i.expires_at").
+		Joins("JOIN organizations o ON o.id = i.org_id").
+		Joins("JOIN users u ON u.id = i.inviter_id").
+		Where("i.invitee_id = ? AND i.status = ? AND i.expires_at > ? AND o.status = ?", userID, "pending", common.GetTimestamp(), OrganizationActive).
+		Order("i.id DESC").Scan(&invites).Error
+	return invites, err
+}
+
+func DeclineOrganizationInvite(userID, inviteID int) error {
+	if inviteID <= 0 {
+		return ErrOrganizationInvite
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var invite OrganizationInvite
+		if err := tx.Where("id = ? AND invitee_id = ?", inviteID, userID).First(&invite).Error; err != nil {
+			return ErrOrganizationInvite
+		}
+		var org Organization
+		if err := lockForUpdate(tx).First(&org, invite.OrgId).Error; err != nil {
+			return ErrOrganizationInvite
+		}
+		if err := tx.First(&invite, invite.Id).Error; err != nil {
+			return err
+		}
+		if invite.Status == "declined" {
+			return nil
+		}
+		if invite.Status != "pending" || invite.ExpiresAt <= common.GetTimestamp() {
+			return ErrOrganizationInvite
+		}
+		if err := tx.Model(&invite).Update("status", "declined").Error; err != nil {
+			return err
+		}
+		return tx.Create(&OrganizationAudit{OrgId: invite.OrgId, ActorId: userID, Action: "member.decline", ObjectId: fmt.Sprint(invite.Id), Result: "success"}).Error
+	})
 }

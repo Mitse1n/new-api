@@ -18,9 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
@@ -39,13 +39,12 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
-import { copyToClipboard } from '@/lib/copy-to-clipboard'
 import { getCurrencyDisplay } from '@/lib/currency'
 import { getServerErrorMessageKey } from '@/lib/server-error-message'
 
 import { organizationMutation } from '../api'
 import { useOrganization } from '../context'
-import type { OrganizationInvite, OrganizationMember } from '../types'
+import type { OrganizationMember } from '../types'
 
 export function MemberDialog(props: {
   member?: OrganizationMember
@@ -55,7 +54,6 @@ export function MemberDialog(props: {
   const { t } = useTranslation()
   const context = useOrganization()
   const client = useQueryClient()
-  const [inviteURL, setInviteURL] = useState('')
   const schema = z.object({
     username: z.string().trim(),
     role: z.enum(['admin', 'member']),
@@ -95,18 +93,18 @@ export function MemberDialog(props: {
           })
           return
         }
-        const result = await organizationMutation<{
-          invite: OrganizationInvite
-          token: string
-        }>('post', 'invites', { username: values.username, role: values.role })
-        const url = new URL('/organization/invite', window.location.origin)
-        url.searchParams.set('token', result.token)
-        setInviteURL(url.toString())
+        await organizationMutation('post', 'invites', {
+          username: values.username,
+          role: values.role,
+        })
+        toast.success(
+          t('Invitation sent. The user can accept it in Notifications.')
+        )
       }
       await client.invalidateQueries({ queryKey: ['organization-members'] })
       await client.invalidateQueries({ queryKey: ['organization-invites'] })
       await client.invalidateQueries({ queryKey: ['organization-summary'] })
-      if (props.member) props.close()
+      props.close()
     },
   })
   let title = t('Invite member')
@@ -128,133 +126,103 @@ export function MemberDialog(props: {
             {t('Changes apply to this organization only.')}
           </DialogDescription>
         </DialogHeader>
-        {inviteURL ? (
+        <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
           <FieldGroup>
-            <Field>
-              <FieldLabel>{t('Invitation link')}</FieldLabel>
-              <Input
-                aria-label={t('Invitation link')}
-                readOnly
-                value={inviteURL}
-              />
-              <FieldDescription>
-                {t(
-                  'Copy this link now. It expires in seven days and can only be accepted by the invited account.'
-                )}
-              </FieldDescription>
-            </Field>
-            <Button
-              onClick={() => {
-                void copyToClipboard(inviteURL)
-              }}
-            >
-              {t('Copy invitation link')}
-            </Button>
-            <Button variant='outline' onClick={props.close}>
-              {t('Done')}
-            </Button>
-          </FieldGroup>
-        ) : (
-          <form
-            onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
-          >
-            <FieldGroup>
-              {!props.budget && (
-                <>
-                  <Field data-invalid={!!form.formState.errors.username}>
-                    <FieldLabel htmlFor='member-username'>
-                      {t('Username')}
-                    </FieldLabel>
-                    <Input
-                      id='member-username'
-                      type='text'
-                      disabled={!!props.member}
-                      aria-invalid={!!form.formState.errors.username}
-                      {...form.register('username')}
-                    />
-                    <FieldDescription>
-                      {form.formState.errors.username?.message}
-                    </FieldDescription>
-                  </Field>
+            {!props.budget && (
+              <>
+                <Field data-invalid={!!form.formState.errors.username}>
+                  <FieldLabel htmlFor='member-username'>
+                    {t('Username')}
+                  </FieldLabel>
+                  <Input
+                    id='member-username'
+                    type='text'
+                    disabled={!!props.member}
+                    aria-invalid={!!form.formState.errors.username}
+                    {...form.register('username')}
+                  />
+                  <FieldDescription>
+                    {form.formState.errors.username?.message}
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor='member-role'>{t('Role')}</FieldLabel>
+                  <NativeSelect id='member-role' {...form.register('role')}>
+                    <NativeSelectOption value='member'>
+                      {t('Member')}
+                    </NativeSelectOption>
+                    <NativeSelectOption value='admin'>
+                      {t('Admin')}
+                    </NativeSelectOption>
+                  </NativeSelect>
+                </Field>
+              </>
+            )}
+            {props.member && (
+              <>
+                <Field data-invalid={!!form.formState.errors.limit}>
+                  <FieldLabel htmlFor='member-limit'>
+                    {t('Spending limit (USD)')}
+                  </FieldLabel>
+                  <Input
+                    id='member-limit'
+                    type='number'
+                    step='0.01'
+                    min='0'
+                    {...form.register('limit', { valueAsNumber: true })}
+                  />
+                  <FieldDescription>
+                    {t(
+                      'Zero means unlimited. This limit does not reserve money from the shared pool.'
+                    )}
+                  </FieldDescription>
+                </Field>
+                {!props.budget && (
                   <Field>
-                    <FieldLabel htmlFor='member-role'>{t('Role')}</FieldLabel>
-                    <NativeSelect id='member-role' {...form.register('role')}>
-                      <NativeSelectOption value='member'>
-                        {t('Member')}
+                    <FieldLabel htmlFor='member-status'>
+                      {t('Status')}
+                    </FieldLabel>
+                    <NativeSelect
+                      id='member-status'
+                      {...form.register('status')}
+                    >
+                      <NativeSelectOption value='1'>
+                        {t('Active')}
                       </NativeSelectOption>
-                      <NativeSelectOption value='admin'>
-                        {t('Admin')}
+                      <NativeSelectOption value='2'>
+                        {t('Disabled')}
+                      </NativeSelectOption>
+                      <NativeSelectOption value='3'>
+                        {t('Removed')}
                       </NativeSelectOption>
                     </NativeSelect>
-                  </Field>
-                </>
-              )}
-              {props.member && (
-                <>
-                  <Field data-invalid={!!form.formState.errors.limit}>
-                    <FieldLabel htmlFor='member-limit'>
-                      {t('Spending limit (USD)')}
-                    </FieldLabel>
-                    <Input
-                      id='member-limit'
-                      type='number'
-                      step='0.01'
-                      min='0'
-                      {...form.register('limit', { valueAsNumber: true })}
-                    />
                     <FieldDescription>
                       {t(
-                        'Zero means unlimited. This limit does not reserve money from the shared pool.'
+                        'Existing API keys remain organization assets when a member leaves.'
                       )}
                     </FieldDescription>
                   </Field>
-                  {!props.budget && (
-                    <Field>
-                      <FieldLabel htmlFor='member-status'>
-                        {t('Status')}
-                      </FieldLabel>
-                      <NativeSelect
-                        id='member-status'
-                        {...form.register('status')}
-                      >
-                        <NativeSelectOption value='1'>
-                          {t('Active')}
-                        </NativeSelectOption>
-                        <NativeSelectOption value='2'>
-                          {t('Disabled')}
-                        </NativeSelectOption>
-                        <NativeSelectOption value='3'>
-                          {t('Removed')}
-                        </NativeSelectOption>
-                      </NativeSelect>
-                      <FieldDescription>
-                        {t(
-                          'Existing API keys remain organization assets when a member leaves.'
-                        )}
-                      </FieldDescription>
-                    </Field>
-                  )}
-                </>
-              )}
-              {mutation.isError && (
-                <p role='alert' className='text-destructive text-sm'>
-                  {t(
-                    getServerErrorMessageKey(mutation.error) ??
-                      mutation.error.message
-                  )}
-                </p>
-              )}
-              <div className='flex justify-end gap-2'>
-                <Button variant='outline' type='button' onClick={props.close}>
-                  {t('Cancel')}
-                </Button>
-                <Button type='submit' disabled={mutation.isPending}>
-                  {t('Confirm')}
-                </Button>
-              </div>
-            </FieldGroup>
-          </form>
-        )}
+                )}
+              </>
+            )}
+            {mutation.isError && (
+              <p role='alert' className='text-destructive text-sm'>
+                {t(
+                  getServerErrorMessageKey(mutation.error) ??
+                    mutation.error.message
+                )}
+              </p>
+            )}
+            <div className='flex justify-end gap-2'>
+              <Button variant='outline' type='button' onClick={props.close}>
+                {t('Cancel')}
+              </Button>
+              <Button type='submit' disabled={mutation.isPending}>
+                {t('Confirm')}
+              </Button>
+            </div>
+          </FieldGroup>
+        </form>
       </DialogContent>
     </Dialog>
   )

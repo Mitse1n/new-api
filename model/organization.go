@@ -68,13 +68,13 @@ type OrganizationInvite struct {
 	OrgId      int    `json:"org_id" gorm:"index:idx_org_invite;not null"`
 	Email      string `json:"email,omitempty" gorm:"type:varchar(254);not null"` // Legacy invitations only; never reinterpret as a username.
 	Username   string `json:"username" gorm:"type:varchar(64)"`
-	InviteeId  int    `json:"invitee_id"`
+	InviteeId  int    `json:"invitee_id" gorm:"index:idx_org_invite_recipient,priority:1"`
 	Role       string `json:"role" gorm:"type:varchar(16);not null"`
 	TokenHash  string `json:"-" gorm:"type:char(64);uniqueIndex;not null"`
-	Status     string `json:"status" gorm:"type:varchar(16);not null"`
+	Status     string `json:"status" gorm:"type:varchar(16);not null;index:idx_org_invite_recipient,priority:2"`
 	InviterId  int    `json:"inviter_id"`
 	AcceptedBy int    `json:"accepted_by"`
-	ExpiresAt  int64  `json:"expires_at" gorm:"type:bigint"`
+	ExpiresAt  int64  `json:"expires_at" gorm:"type:bigint;index:idx_org_invite_recipient,priority:3"`
 	CreatedAt  int64  `json:"created_at" gorm:"autoCreateTime"`
 }
 

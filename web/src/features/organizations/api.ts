@@ -24,6 +24,7 @@ import type {
   OrganizationContext,
   OrganizationDeletionImpact,
   OrganizationInvite,
+  IncomingOrganizationInvite,
   OrganizationMember,
   OrganizationMembership,
   OrganizationOrder,
@@ -120,12 +121,35 @@ export async function changeOrganizationStatus(
   )
   if (!response.data.success) throw new Error(response.data.message)
 }
-export async function acceptOrganizationInvite(token: string): Promise<number> {
+export async function acceptOrganizationInvite(
+  inviteID: number
+): Promise<number> {
   const response = await api.post<Response<{ org_id: number }>>(
-    '/api/organizations/invites/accept',
-    { token },
+    `/api/organizations/invites/${inviteID}/accept`,
+    {},
     { skipOrganizationContext: true }
   )
   if (!response.data.success) throw new Error(response.data.message)
   return response.data.data.org_id
+}
+
+export async function getIncomingOrganizationInvites(): Promise<
+  IncomingOrganizationInvite[]
+> {
+  const response = await api.get<Response<IncomingOrganizationInvite[]>>(
+    '/api/organizations/invites',
+    { skipOrganizationContext: true, skipErrorHandler: true }
+  )
+  if (!response.data.success) throw new Error(response.data.message)
+  return response.data.data
+}
+export async function declineOrganizationInvite(
+  inviteID: number
+): Promise<void> {
+  const response = await api.post<Response<unknown>>(
+    `/api/organizations/invites/${inviteID}/decline`,
+    {},
+    { skipOrganizationContext: true }
+  )
+  if (!response.data.success) throw new Error(response.data.message)
 }

@@ -22,7 +22,6 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Dialog } from '@/components/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -32,7 +31,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from '@/components/ui/empty'
-import { Input } from '@/components/ui/input'
 import {
   InputGroup,
   InputGroupAddon,
@@ -65,13 +63,12 @@ export function Members(props: { budgets?: boolean }) {
   const client = useQueryClient()
   const manage = context.capabilities.org['org.member']?.write === true
   const team = context.organization.kind === 'team'
-  const [resentLink, setResentLink] = useState('')
   const resend = useMutation({
     mutationFn: (id: number) =>
-      organizationMutation<{ token: string }>('post', `invites/${id}/resend`),
-    onSuccess: (data) => {
-      setResentLink(
-        `${window.location.origin}/organization/invite?token=${data.token}`
+      organizationMutation('post', `invites/${id}/resend`),
+    onSuccess: () => {
+      toast.success(
+        t('Invitation sent. The user can accept it in Notifications.')
       )
       void client.invalidateQueries({ queryKey: ['organization-invites'] })
     },
@@ -110,6 +107,7 @@ export function Members(props: { budgets?: boolean }) {
     accepted: t('Accepted'),
     expired: t('Expired'),
     revoked: t('Revoked'),
+    declined: t('Declined'),
   }
   const filtered = (members.data ?? []).filter((member) =>
     `${member.email} ${member.username} ${member.display_name}`
@@ -310,27 +308,6 @@ export function Members(props: { budgets?: boolean }) {
           </CardContent>
         </Card>
       )}
-      <Dialog
-        open={!!resentLink}
-        onOpenChange={(open) => {
-          if (!open) setResentLink('')
-        }}
-        title={t('Invitation link')}
-        contentHeight='auto'
-      >
-        <p>{t('The previous invitation link is no longer valid.')}</p>
-        <Input readOnly aria-label={t('Invitation link')} value={resentLink} />
-        <Button
-          onClick={() => {
-            void navigator.clipboard
-              .writeText(resentLink)
-              .then(() => toast.success(t('Copied')))
-              .catch(() => toast.error(t('Copy failed')))
-          }}
-        >
-          {t('Copy')}
-        </Button>
-      </Dialog>
       {dialog && (
         <MemberDialog
           member={dialog === 'invite' ? undefined : dialog}
