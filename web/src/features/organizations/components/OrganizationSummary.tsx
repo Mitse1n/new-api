@@ -30,11 +30,12 @@ import { formatQuotaWithCurrency } from '@/lib/currency'
 import { useOrganizationStore } from '@/stores/organization-store'
 
 import { getOrganizationSummary, organizationMutation } from '../api'
-import { useOrganization } from '../context'
+import { useHasTeamOrganizations, useOrganization } from '../context'
 
 export function OrganizationSummary() {
   const { t } = useTranslation()
   const context = useOrganization()
+  const hasTeamOrganizations = useHasTeamOrganizations()
   const client = useQueryClient()
   const [confirmTransfer, setConfirmTransfer] = useState(false)
   const accept = useMutation({
@@ -49,8 +50,9 @@ export function OrganizationSummary() {
   const summary = useQuery({
     queryKey: ['organization-summary', context.organization.id],
     queryFn: getOrganizationSummary,
-    enabled: !platform,
+    enabled: !platform && hasTeamOrganizations,
   })
+  if (!hasTeamOrganizations) return null
   if (platform) {
     return (
       <div className='bg-muted/30 rounded-xl border px-4 py-3 text-sm'>

@@ -41,6 +41,7 @@ import { useSidebarData } from '@/hooks/use-sidebar-data'
 import { useAuthStore } from '@/stores/auth-store'
 import { useOrganizationStore } from '@/stores/organization-store'
 
+import { OrganizationSummary } from '../components/OrganizationSummary'
 import { OrganizationSwitcher } from '../components/OrganizationSwitcher'
 import { useHasTeamOrganizations } from '../context'
 import { OrganizationPage } from '../index'
@@ -161,6 +162,17 @@ test('personal-only accounts retain original navigation and a first-organization
   expect(urls).toContain('/wallet')
   expect(urls).toContain('/organization/settings')
   expect(urls).not.toContain('/platform/organizations')
+})
+
+test('personal-only accounts do not see the organization summary panel', () => {
+  render(
+    <Wrapper>
+      <OrganizationSummary />
+    </Wrapper>
+  )
+  expect(screen.queryByText('Personal account')).not.toBeInTheDocument()
+  expect(screen.queryByText('Organization wallet')).not.toBeInTheDocument()
+  expect(screen.queryByText('My remaining limit')).not.toBeInTheDocument()
 })
 
 test('joining and leaving the last team updates organization navigation', async () => {
