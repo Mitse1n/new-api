@@ -114,3 +114,28 @@ Node 25 的实验性 Web Storage 与项目测试环境冲突，测试禁用该�
 支付接入通过本地订单/回调回归验证，没有使用支付商真实账户或完成真实扣款。部署时仍需使用运营方自己的渠道配置完成支付商沙箱或小额验收。
 
 静态文案检查覆盖涉及页面的 468 个键，七种语言均无缺失。复验请使用工具说明中的独立测试库流程。
+
+
+## 用户名邀请（2026-09-04）
+
+创建邀请接受 `username`（去除首尾空格，精确匹配已注册且启用的账号），不再接受邮箱作为邀请身份。服务端保存 `invitee_id` 和用户名快照；接受与重发均绑定原账号 ID，账号改名或原用户名被其他账号使用不会转移邀请。无需绑定邮箱。重复邀请、已加入、账号不可用、错误身份、过期和令牌轮换继续校验。
+
+迁移仅新增可空的 `username`、`invitee_id` 列，保留原 `email`、令牌哈希、状态、有效期及索引。旧邮箱邀请不自动解释为用户名：待接受的旧链接返回 `ORG_INVITE_LEGACY`，管理员应撤销后按用户名创建新邀请。已接受记录保留。回滚应恢复升级前备份；不要让旧版邮箱校验代码直接处理新增的用户名邀请记录。
+
+验证使用独立测试库，不修改部署环境的用户和邀请数据：
+
+- SQLite **3.50.4**、MySQL **5.7.44**、PostgreSQL **9.6.24**：邀请行为测试通过，覆盖无邮箱加入、错误/停用账号拒绝、精确用户名、改名后身份不转移、重复邀请、重发令牌轮换和接受幂等。
+- 三种数据库均通过旧邀请表升级测试：连续两次 `AutoMigrate` 后旧数据、组织索引及令牌唯一约束保留；旧邮箱邀请必须重新创建。
+- 三种数据库均完成新建及从实际发布版 **v1.0.0-rc.30 / 27ff6a87** 创建的代表性数据库升级，连续两次完整初始化通过，原余额、资源归属、日志及唯一性检查通过。本次邀请表不属于独立日志库。
+
+实际验证命令（MySQL/PostgreSQL DSN 必须指向可销毁的独立库）：
+
+```sh
+go test ./model -run TestOrganizationInvit -count=1
+TENANCY_TEST_MYSQL_DSN="$INVITE_MYSQL_DSN" go test ./model -run TestOrganizationInvit -count=1
+TENANCY_TEST_POSTGRES_DSN="$INVITE_POSTGRES_DSN" go test ./model -run TestOrganizationInvit -count=1
+go build -o /tmp/new-api-username-startup ./tools/multi-tenancy-verify
+# fresh：空库直接执行；upgrade：先运行由发布版本构建的 released-fixture。
+# 每个数据库分别配置 SQL_DSN 或 SQLITE_PATH，再运行：
+TENANCY_VERIFY_STARTUP=1 /tmp/new-api-username-startup
+```

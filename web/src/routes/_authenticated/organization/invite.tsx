@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/card'
 import { acceptOrganizationInvite } from '@/features/organizations/api'
 import { useSwitchOrganization } from '@/features/organizations/context'
+import { getServerErrorMessageKey } from '@/lib/server-error-message'
 import { useAuthStore } from '@/stores/auth-store'
 
 export const Route = createFileRoute('/_authenticated/organization/invite')({
@@ -41,7 +42,7 @@ export const Route = createFileRoute('/_authenticated/organization/invite')({
 function AcceptInvite() {
   const { t } = useTranslation()
   const search = Route.useSearch()
-  const email = useAuthStore((state) => state.auth.user?.email)
+  const username = useAuthStore((state) => state.auth.user?.username)
   const switchOrg = useSwitchOrganization()
   const accept = useMutation({
     mutationFn: () => acceptOrganizationInvite(search.token),
@@ -57,17 +58,16 @@ function AcceptInvite() {
           <CardHeader>
             <CardTitle>{t('Join organization')}</CardTitle>
             <CardDescription>
-              {t(
-                'Accept with the email address that received this invitation.'
-              )}{' '}
-              · {email}
+              {t('Sign in with the username that received this invitation.')} ·{' '}
+              {username}
             </CardDescription>
           </CardHeader>
           <CardContent className='flex flex-col gap-4'>
             {accept.isError && (
               <p role='alert' className='text-destructive'>
                 {t(
-                  'Invitation unavailable. Check your email address or ask the organization administrator for a new link.'
+                  getServerErrorMessageKey(accept.error) ??
+                    'Invitation unavailable. Check your username or ask the organization administrator for a new link.'
                 )}
               </p>
             )}

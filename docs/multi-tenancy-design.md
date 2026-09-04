@@ -162,7 +162,7 @@ group 已能做到：**这批 key 只能走这批渠道、按这个倍率计费�
 - **User（保持全局）**：一个人一个登录身份，复用现有密码 / OAuth / Passkey / 2FA / session 体系，不动。若把用户表按租户切开，认证栈要整个重做。
 - **Organization**：租户主体，承载**钱包、订阅、成员、用量归属**。
 - **OrganizationMember**：`(user_id, org_id, org_role, spend_limit)`，一个用户可属多个组织。
-- **OrganizationInvite**：邮箱 / 链接邀请，明文 token 只展示一次，服务端存哈希。
+- **OrganizationInvite**：用户名 / 链接邀请（绑定已有账号 ID），明文 token 只展示一次，服务端存哈希。
 - **个人组织（Personal Org）**：已确认平台继续服务个人开发者，因此每个用户注册时自动建一个只含自己的 `personal` 组织。这样系统里**不存在「没有组织」的资源**，代码里不需要 `org_id IS NULL` 分支——这是让迁移能收敛的关键决定，也让个人用户与组织客户共用同一套计费代码。
 
 **角色分层（两层，互不混淆）**

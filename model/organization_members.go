@@ -6,8 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/mail"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
@@ -15,6 +16,8 @@ import (
 
 var ErrOrganizationInvite = errors.New("invitation unavailable or identity does not match")
 var ErrOrganizationMemberExists = errors.New("user is already an active organization member")
+var ErrOrganizationInviteLegacy = errors.New("legacy email invitation requires replacement")
+var ErrOrganizationInviteUser = errors.New("invited username is unavailable")
 var ErrOrganizationInvitePending = errors.New("an active invitation already exists")
 
 type OrganizationMembership struct {
@@ -79,10 +82,9 @@ func organizationSeatLimit(tx *gorm.DB, orgID int) (int, error) {
 	return max, nil
 }
 
-func CreateOrganizationInvite(orgID, actorID int, email, role string) (*OrganizationInvite, string, error) {
-	email = NormalizeEmail(email)
-	address, err := mail.ParseAddress(email)
-	if err != nil || address.Address != email || len(email) > 254 || (role != OrgRoleAdmin && role != OrgRoleMember) {
+func CreateOrganizationInvite(orgID, actorID int, username, role string) (*OrganizationInvite, string, error) {
+	username = strings.TrimSpace(username)
+	if username == "" || utf8.RuneCountInString(username) > 20 || (role != OrgRoleAdmin && role != OrgRoleMember) {
 		return nil, "", ErrOrganizationInput
 	}
 	secret := make([]byte, 32)
@@ -91,8 +93,8 @@ func CreateOrganizationInvite(orgID, actorID int, email, role string) (*Organiza
 	}
 	token := hex.EncodeToString(secret)
 	hash := sha256.Sum256([]byte(token))
-	invite := OrganizationInvite{OrgId: orgID, Email: email, Role: role, TokenHash: hex.EncodeToString(hash[:]), Status: "pending", InviterId: actorID, ExpiresAt: time.Now().Add(7 * 24 * time.Hour).Unix()}
-	err = DB.Transaction(func(tx *gorm.DB) error {
+	invite := OrganizationInvite{OrgId: orgID, Username: username, Role: role, TokenHash: hex.EncodeToString(hash[:]), Status: "pending", InviterId: actorID, ExpiresAt: time.Now().Add(7 * 24 * time.Hour).Unix()}
+	err := DB.Transaction(func(tx *gorm.DB) error {
 		org, err := lockOrganizationManager(tx, orgID, actorID, false)
 		if err != nil {
 			return err
@@ -100,14 +102,26 @@ func CreateOrganizationInvite(orgID, actorID int, email, role string) (*Organiza
 		if org.Kind == OrganizationPersonal {
 			return ErrOrganizationOwner
 		}
+		var target User
+		if err := tx.Where("username = ? AND status = ?", username, common.UserStatusEnabled).First(&target).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrOrganizationInviteUser
+			}
+			return err
+		}
+		// Enforce exact matching even with case-insensitive database collations.
+		if target.Username != username {
+			return ErrOrganizationInviteUser
+		}
+		invite.InviteeId = target.Id
 		var count int64
-		if err := tx.Model(&OrganizationMember{}).Joins("JOIN users ON users.id = organization_members.user_id").Where("organization_members.org_id = ? AND organization_members.status = ? AND LOWER(users.email) = ?", orgID, OrganizationActive, email).Count(&count).Error; err != nil {
+		if err := tx.Model(&OrganizationMember{}).Scopes(OrgScope(orgID)).Where("user_id = ? AND status = ?", target.Id, OrganizationActive).Count(&count).Error; err != nil {
 			return err
 		}
 		if count > 0 {
 			return ErrOrganizationMemberExists
 		}
-		if err := tx.Model(&OrganizationInvite{}).Scopes(OrgScope(orgID)).Where("email = ? AND status = ? AND expires_at > ?", email, "pending", common.GetTimestamp()).Count(&count).Error; err != nil {
+		if err := tx.Model(&OrganizationInvite{}).Scopes(OrgScope(orgID)).Where("invitee_id = ? AND status = ? AND expires_at > ?", target.Id, "pending", common.GetTimestamp()).Count(&count).Error; err != nil {
 			return err
 		}
 		if count > 0 {
@@ -164,11 +178,14 @@ func AcceptOrganizationInvite(userID int, token string) (int, error) {
 		if invite.Status != "pending" || invite.ExpiresAt <= common.GetTimestamp() {
 			return ErrOrganizationInvite
 		}
+		if invite.InviteeId == 0 {
+			return ErrOrganizationInviteLegacy
+		}
 		var user User
 		if err := tx.Where("id = ? AND status = ?", userID, common.UserStatusEnabled).First(&user).Error; err != nil {
 			return ErrOrganizationInvite
 		}
-		if NormalizeEmail(user.Email) != invite.Email {
+		if user.Id != invite.InviteeId {
 			return ErrOrganizationInvite
 		}
 		var member OrganizationMember
@@ -285,6 +302,21 @@ func ResendOrganizationInvite(orgID, actorID, inviteID int) (*OrganizationInvite
 		if err := tx.Scopes(OrgScope(orgID)).Where("id = ? AND status = ?", inviteID, "pending").First(&invite).Error; err != nil {
 			return ErrOrganizationInvite
 		}
+		if invite.InviteeId == 0 {
+			return ErrOrganizationInviteLegacy
+		}
+		var target User
+		if err := tx.Where("id = ? AND status = ?", invite.InviteeId, common.UserStatusEnabled).First(&target).Error; err != nil {
+			return ErrOrganizationInviteUser
+		}
+		var activeMembers int64
+		if err := tx.Model(&OrganizationMember{}).Scopes(OrgScope(orgID)).Where("user_id = ? AND status = ?", invite.InviteeId, OrganizationActive).Count(&activeMembers).Error; err != nil {
+			return err
+		}
+		if activeMembers > 0 {
+			return ErrOrganizationMemberExists
+		}
+		invite.Username = target.Username
 		if invite.ExpiresAt <= common.GetTimestamp() {
 			max, err := organizationSeatLimit(tx, orgID)
 			if err != nil {
@@ -300,7 +332,7 @@ func ResendOrganizationInvite(orgID, actorID, inviteID int) (*OrganizationInvite
 			if max > 0 && members+pending >= int64(max) {
 				return ErrOrganizationSeats
 			}
-			if err := tx.Model(&OrganizationInvite{}).Scopes(OrgScope(orgID)).Where("email = ? AND id <> ? AND status = ? AND expires_at > ?", invite.Email, invite.Id, "pending", common.GetTimestamp()).Count(&pending).Error; err != nil {
+			if err := tx.Model(&OrganizationInvite{}).Scopes(OrgScope(orgID)).Where("invitee_id = ? AND id <> ? AND status = ? AND expires_at > ?", invite.InviteeId, invite.Id, "pending", common.GetTimestamp()).Count(&pending).Error; err != nil {
 				return err
 			}
 			if pending > 0 {

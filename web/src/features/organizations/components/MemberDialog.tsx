@@ -41,6 +41,7 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { copyToClipboard } from '@/lib/copy-to-clipboard'
 import { getCurrencyDisplay } from '@/lib/currency'
+import { getServerErrorMessageKey } from '@/lib/server-error-message'
 
 import { organizationMutation } from '../api'
 import { useOrganization } from '../context'
@@ -56,7 +57,7 @@ export function MemberDialog(props: {
   const client = useQueryClient()
   const [inviteURL, setInviteURL] = useState('')
   const schema = z.object({
-    email: z.string().email(t('Enter a valid email address')).or(z.literal('')),
+    username: z.string().trim(),
     role: z.enum(['admin', 'member']),
     status: z.enum(['1', '2', '3']),
     limit: z
@@ -67,7 +68,7 @@ export function MemberDialog(props: {
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
-      email: props.member?.email ?? '',
+      username: props.member?.username ?? '',
       role: props.member?.role === 'admin' ? 'admin' : 'member',
       status: String(props.member?.status ?? 1) as '1' | '2' | '3',
       limit:
@@ -88,14 +89,16 @@ export function MemberDialog(props: {
           spend_limit,
         })
       } else {
-        if (!values.email) {
-          form.setError('email', { message: t('Enter a valid email address') })
+        if (!values.username) {
+          form.setError('username', {
+            message: t('Please enter your username'),
+          })
           return
         }
         const result = await organizationMutation<{
           invite: OrganizationInvite
           token: string
-        }>('post', 'invites', { email: values.email, role: values.role })
+        }>('post', 'invites', { username: values.username, role: values.role })
         const url = new URL('/organization/invite', window.location.origin)
         url.searchParams.set('token', result.token)
         setInviteURL(url.toString())
@@ -136,7 +139,7 @@ export function MemberDialog(props: {
               />
               <FieldDescription>
                 {t(
-                  'Copy this link now. It expires in seven days and can only be accepted by the invited email address.'
+                  'Copy this link now. It expires in seven days and can only be accepted by the invited account.'
                 )}
               </FieldDescription>
             </Field>
@@ -158,17 +161,19 @@ export function MemberDialog(props: {
             <FieldGroup>
               {!props.budget && (
                 <>
-                  <Field data-invalid={!!form.formState.errors.email}>
-                    <FieldLabel htmlFor='member-email'>{t('Email')}</FieldLabel>
+                  <Field data-invalid={!!form.formState.errors.username}>
+                    <FieldLabel htmlFor='member-username'>
+                      {t('Username')}
+                    </FieldLabel>
                     <Input
-                      id='member-email'
-                      type='email'
+                      id='member-username'
+                      type='text'
                       disabled={!!props.member}
-                      aria-invalid={!!form.formState.errors.email}
-                      {...form.register('email')}
+                      aria-invalid={!!form.formState.errors.username}
+                      {...form.register('username')}
                     />
                     <FieldDescription>
-                      {form.formState.errors.email?.message}
+                      {form.formState.errors.username?.message}
                     </FieldDescription>
                   </Field>
                   <Field>
@@ -233,7 +238,10 @@ export function MemberDialog(props: {
               )}
               {mutation.isError && (
                 <p role='alert' className='text-destructive text-sm'>
-                  {mutation.error.message}
+                  {t(
+                    getServerErrorMessageKey(mutation.error) ??
+                      mutation.error.message
+                  )}
                 </p>
               )}
               <div className='flex justify-end gap-2'>

@@ -254,7 +254,7 @@ export function Members(props: { budgets?: boolean }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t('Email')}</TableHead>
+                  <TableHead>{t('Username')}</TableHead>
                   <TableHead>{t('Role')}</TableHead>
                   <TableHead>{t('Status')}</TableHead>
                   <TableHead>{t('Expires')}</TableHead>
@@ -264,24 +264,34 @@ export function Members(props: { budgets?: boolean }) {
               <TableBody>
                 {(invites.data ?? []).map((invite) => (
                   <TableRow key={invite.id}>
-                    <TableCell>{invite.email}</TableCell>
+                    <TableCell>
+                      {invite.username || invite.email}
+                      {!invite.invitee_id && (
+                        <p className='text-muted-foreground text-xs'>
+                          {t(
+                            'Legacy email invitation. Revoke it and invite by username.'
+                          )}
+                        </p>
+                      )}
+                    </TableCell>
                     <TableCell>{roleLabels[invite.role]}</TableCell>
                     <TableCell>{inviteLabels[invite.status]}</TableCell>
                     <TableCell>
                       {new Date(invite.expires_at * 1000).toLocaleDateString()}
                     </TableCell>
                     <TableCell className='text-end'>
-                      {(invite.status === 'pending' ||
-                        invite.status === 'expired') && (
-                        <Button
-                          size='sm'
-                          variant='ghost'
-                          disabled={resend.isPending}
-                          onClick={() => resend.mutate(invite.id)}
-                        >
-                          {t('Resend')}
-                        </Button>
-                      )}
+                      {!!invite.invitee_id &&
+                        (invite.status === 'pending' ||
+                          invite.status === 'expired') && (
+                          <Button
+                            size='sm'
+                            variant='ghost'
+                            disabled={resend.isPending}
+                            onClick={() => resend.mutate(invite.id)}
+                          >
+                            {t('Resend')}
+                          </Button>
+                        )}
                       {invite.status === 'pending' && (
                         <Button
                           size='sm'

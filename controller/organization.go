@@ -25,6 +25,10 @@ func organizationError(c *gin.Context, err error) {
 		status, code, message = http.StatusBadRequest, "ORG_INVITE_PENDING", "An invitation is already pending. Resend it from the invitation list."
 	case errors.Is(err, model.ErrOrganizationInput):
 		status, code, message = http.StatusBadRequest, "ORG_INVALID", "Invalid organization details"
+	case errors.Is(err, model.ErrOrganizationInviteUser):
+		status, code, message = http.StatusBadRequest, "ORG_INVITE_USER", "No active account matches this username."
+	case errors.Is(err, model.ErrOrganizationInviteLegacy):
+		status, code, message = http.StatusBadRequest, "ORG_INVITE_LEGACY", "This email invitation is no longer supported. Ask an organization administrator to invite your username."
 	case errors.Is(err, model.ErrOrganizationInvite):
 		status, code, message = http.StatusBadRequest, "ORG_INVITE", "Invitation unavailable or identity does not match"
 	case errors.Is(err, model.ErrOrganizationSeats):
@@ -154,14 +158,14 @@ func GetOrganizationInvites(c *gin.Context) {
 
 func InviteOrganizationMember(c *gin.Context) {
 	var input struct {
-		Email string `json:"email"`
-		Role  string `json:"role"`
+		Username string `json:"username"`
+		Role     string `json:"role"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		organizationError(c, model.ErrOrganizationInput)
 		return
 	}
-	invite, token, err := model.CreateOrganizationInvite(c.GetInt("org_id"), c.GetInt("id"), input.Email, input.Role)
+	invite, token, err := model.CreateOrganizationInvite(c.GetInt("org_id"), c.GetInt("id"), input.Username, input.Role)
 	if err != nil {
 		organizationError(c, err)
 		return

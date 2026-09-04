@@ -66,7 +66,9 @@ type OrganizationMember struct {
 type OrganizationInvite struct {
 	Id         int    `json:"id"`
 	OrgId      int    `json:"org_id" gorm:"index:idx_org_invite;not null"`
-	Email      string `json:"email" gorm:"type:varchar(254);not null"`
+	Email      string `json:"email,omitempty" gorm:"type:varchar(254);not null"` // Legacy invitations only; never reinterpret as a username.
+	Username   string `json:"username" gorm:"type:varchar(64)"`
+	InviteeId  int    `json:"invitee_id"`
 	Role       string `json:"role" gorm:"type:varchar(16);not null"`
 	TokenHash  string `json:"-" gorm:"type:char(64);uniqueIndex;not null"`
 	Status     string `json:"status" gorm:"type:varchar(16);not null"`

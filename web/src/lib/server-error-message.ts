@@ -25,6 +25,9 @@ const serverErrorMessageKeys = {
   ORG_UNAVAILABLE: 'Organization unavailable. Returning to Personal.',
   ORG_FORBIDDEN: 'You do not have permission for this action.',
   ORG_INVALID: 'Invalid organization details',
+  ORG_INVITE_USER: 'No active account matches this username.',
+  ORG_INVITE_LEGACY:
+    'This email invitation is no longer supported. Ask an organization administrator to invite your username.',
   ORG_INVITE: 'Invitation unavailable or identity does not match',
   ORG_SEATS: 'Organization member limit reached',
   ORG_OWNER: 'Ownership operation is not allowed',

@@ -122,7 +122,7 @@ function renderDialog(props: Parameters<typeof MemberDialog>[0]) {
   )
 }
 
-test('an empty invitation email shows a validation error without sending a request', async () => {
+test('an empty invitation username shows a validation error without sending a request', async () => {
   renderDialog({ close: vi.fn() })
   expect(screen.getByRole('dialog')).toHaveAccessibleName('Invite member')
   expect(
@@ -130,20 +130,20 @@ test('an empty invitation email shows a validation error without sending a reque
   ).toEqual(['Member', 'Admin'])
   fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
   await waitFor(() =>
-    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveAttribute(
+    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveAttribute(
       'aria-invalid',
       'true'
     )
   )
-  expect(screen.getByText('Enter a valid email address')).toBeVisible()
+  expect(screen.getByText('Please enter your username')).toBeVisible()
   expect(requests).toHaveLength(0)
 })
 
 test('a successful invitation is scoped to the team and shows its one-time readonly link', async () => {
   const close = vi.fn()
   renderDialog({ close })
-  fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
-    target: { value: 'new@example.test' },
+  fireEvent.change(screen.getByRole('textbox', { name: 'Username' }), {
+    target: { value: 'new-member' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
   const link = await screen.findByRole('textbox', { name: 'Invitation link' })
@@ -157,14 +157,14 @@ test('a successful invitation is scoped to the team and shows its one-time reado
   expect(requests).toHaveLength(1)
   expect(requests[0].headers['X-Org-Id']).toBe('10')
   expect(JSON.parse(requests[0].data)).toEqual({
-    email: 'new@example.test',
+    username: 'new-member',
     role: 'member',
   })
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   expect(close).toHaveBeenCalledOnce()
 })
 
-test('a rejected invitation preserves the email and presents the server error for correction', async () => {
+test('a rejected invitation preserves the username and presents the server error for correction', async () => {
   response = {
     success: false,
     data: { token: '' },
@@ -172,15 +172,15 @@ test('a rejected invitation preserves the email and presents the server error fo
   }
   const close = vi.fn()
   renderDialog({ close })
-  fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
-    target: { value: 'new@example.test' },
+  fireEvent.change(screen.getByRole('textbox', { name: 'Username' }), {
+    target: { value: 'new-member' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Team seat limit reached'
   )
-  expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue(
-    'new@example.test'
+  expect(screen.getByRole('textbox', { name: 'Username' })).toHaveValue(
+    'new-member'
   )
   expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled()
   expect(close).not.toHaveBeenCalled()

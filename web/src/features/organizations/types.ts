@@ -58,7 +58,9 @@ export type OrganizationContext = {
 }
 export type OrganizationInvite = {
   id: number
-  email: string
+  username: string
+  invitee_id: number
+  email?: string
   role: 'admin' | 'member'
   status: 'pending' | 'accepted' | 'expired' | 'revoked'
   expires_at: number
