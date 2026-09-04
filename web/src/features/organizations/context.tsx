@@ -49,15 +49,16 @@ export function useSwitchOrganization() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
-  return (orgID: number, platform = false) => {
+  return (orgID: number) => {
     void client.cancelQueries()
     client.removeQueries()
-    useOrganizationStore.getState().select(orgID, platform)
+    useOrganizationStore.getState().select(orgID)
+    if (pathname.startsWith('/platform/')) return
     const organizationSection = pathname.match(
       /^\/organization\/(members|billing|plans|settings|audit)$/
     )?.[1]
     const dashboardSection = pathname.match(/^\/dashboard\/([^/]+)$/)?.[1]
-    if (!platform && organizationSection) {
+    if (organizationSection) {
       void navigate({
         to: '/organization/$section',
         params: { section: organizationSection },
@@ -71,15 +72,15 @@ export function useSwitchOrganization() {
       })
       return
     }
-    if (!platform && pathname === '/keys') {
+    if (pathname === '/keys') {
       void navigate({ to: '/keys', search: {} })
       return
     }
-    if (!platform && pathname === '/wallet') {
+    if (pathname === '/wallet') {
       void navigate({ to: '/wallet', search: {} })
       return
     }
-    if (!platform && pathname.startsWith('/usage-logs/')) {
+    if (pathname.startsWith('/usage-logs/')) {
       void navigate({
         to: '/usage-logs/$section',
         params: { section: pathname.split('/')[2] },

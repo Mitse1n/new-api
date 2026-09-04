@@ -37,9 +37,13 @@ import type {
 // Generic API Helpers
 // ============================================================================
 
-function buildApiPath(endpoint: string, isAdmin: boolean): string {
+function buildApiPath(
+  endpoint: string,
+  isAdmin: boolean,
+  platform: boolean
+): string {
   const state = useOrganizationStore.getState()
-  if (state.context && !state.platform) {
+  if (state.context && !platform) {
     return endpoint === '/api/log' ? '/api/org/logs' : `${endpoint}/self`
   }
   return isAdmin ? endpoint : `${endpoint}/self`
@@ -48,11 +52,12 @@ function buildApiPath(endpoint: string, isAdmin: boolean): string {
 async function fetchLogs<T>(
   endpoint: string,
   params: T,
-  isAdmin: boolean
+  isAdmin: boolean,
+  platform = false
 ): Promise<GetLogsResponse> {
   const state = useOrganizationStore.getState()
   const paramRecord = params as unknown as Record<string, unknown>
-  if (state.context && !state.platform && !isAdmin) {
+  if (state.context && !platform && !isAdmin) {
     paramRecord.user_id = useAuthStore.getState().auth.user?.id
   }
   const queryParams = buildQueryParams({
@@ -60,24 +65,29 @@ async function fetchLogs<T>(
     page_size: paramRecord.page_size || 20,
     ...params,
   })
-  const path = buildApiPath(endpoint, isAdmin)
-  const res = await api.get(`${path}?${queryParams}`)
+  const path = buildApiPath(endpoint, isAdmin, platform)
+  const res = await api.get(`${path}?${queryParams}`, {
+    skipOrganizationContext: platform,
+  })
   return res.data
 }
 
 async function fetchLogStats<T>(
   endpoint: string,
   params: T,
-  isAdmin: boolean
+  isAdmin: boolean,
+  platform = false
 ): Promise<GetLogStatsResponse> {
   const paramRecord = params as unknown as Record<string, unknown>
   const state = useOrganizationStore.getState()
-  if (state.context && !state.platform && !isAdmin) {
+  if (state.context && !platform && !isAdmin) {
     paramRecord.user_id = useAuthStore.getState().auth.user?.id
   }
   const queryParams = buildQueryParams(paramRecord)
-  const path = buildApiPath(endpoint, isAdmin)
-  const res = await api.get(`${path}/stat?${queryParams}`)
+  const path = buildApiPath(endpoint, isAdmin, platform)
+  const res = await api.get(`${path}/stat?${queryParams}`, {
+    skipOrganizationContext: platform,
+  })
   return res.data
 }
 
@@ -85,19 +95,21 @@ async function fetchLogStats<T>(
 // Common Log APIs
 // ============================================================================
 
-export const getAllLogs = (params: GetLogsParams = {}) =>
-  fetchLogs('/api/log', params, true)
+export const getAllLogs = (params: GetLogsParams = {}, platform = false) =>
+  fetchLogs('/api/log', params, true, platform)
 
 export const getUserLogs = (
-  params: Omit<GetLogsParams, 'username' | 'channel'> = {}
-) => fetchLogs('/api/log', params, false)
+  params: Omit<GetLogsParams, 'username' | 'channel'> = {},
+  platform = false
+) => fetchLogs('/api/log', params, false, platform)
 
-export const getLogStats = (params: GetLogStatsParams = {}) =>
-  fetchLogStats('/api/log', params, true)
+export const getLogStats = (params: GetLogStatsParams = {}, platform = false) =>
+  fetchLogStats('/api/log', params, true, platform)
 
 export const getUserLogStats = (
-  params: Omit<GetLogStatsParams, 'username' | 'channel'> = {}
-) => fetchLogStats('/api/log', params, false)
+  params: Omit<GetLogStatsParams, 'username' | 'channel'> = {},
+  platform = false
+) => fetchLogStats('/api/log', params, false, platform)
 
 export async function getUserInfo(
   userId: number
@@ -110,21 +122,25 @@ export async function getUserInfo(
 // MjProxy (Drawing) Logs API
 // ============================================================================
 
-export const getAllMidjourneyLogs = (params: GetMidjourneyLogsParams) =>
-  fetchLogs('/api/mj', params, true)
+export const getAllMidjourneyLogs = (
+  params: GetMidjourneyLogsParams,
+  platform = false
+) => fetchLogs('/api/mj', params, true, platform)
 
-export const getUserMidjourneyLogs = (params: GetMidjourneyLogsParams) =>
-  fetchLogs('/api/mj', params, false)
+export const getUserMidjourneyLogs = (
+  params: GetMidjourneyLogsParams,
+  platform = false
+) => fetchLogs('/api/mj', params, false, platform)
 
 // ============================================================================
 // Task Logs API
 // ============================================================================
 
-export const getAllTaskLogs = (params: GetTaskLogsParams) =>
-  fetchLogs('/api/task', params, true)
+export const getAllTaskLogs = (params: GetTaskLogsParams, platform = false) =>
+  fetchLogs('/api/task', params, true, platform)
 
-export const getUserTaskLogs = (params: GetTaskLogsParams) =>
-  fetchLogs('/api/task', params, false)
+export const getUserTaskLogs = (params: GetTaskLogsParams, platform = false) =>
+  fetchLogs('/api/task', params, false, platform)
 
 const taskArtifactRequestConfig = {
   skipBusinessError: true,

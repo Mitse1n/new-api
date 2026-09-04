@@ -38,7 +38,6 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import type { SidebarData } from '@/components/layout/types'
-import { useHasTeamOrganizations } from '@/features/organizations/context'
 import { ROLE } from '@/lib/roles'
 import { useOrganizationStore } from '@/stores/organization-store'
 
@@ -50,8 +49,9 @@ import { useOrganizationStore } from '@/stores/organization-store'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
-  const platform = useOrganizationStore((state) => state.platform)
-  const hasTeamOrganizations = useHasTeamOrganizations()
+  const isTeam = useOrganizationStore(
+    (state) => state.context?.organization.kind === 'team'
+  )
   const capabilities = useOrganizationStore(
     (state) => state.context?.capabilities.org
   )
@@ -128,6 +128,22 @@ export function useSidebarData(): SidebarData {
         title: t('Admin'),
         items: [
           {
+            title: t('Dashboard'),
+            url: '/platform/dashboard/models',
+            icon: LayoutDashboard,
+          },
+          {
+            title: t('Usage Logs'),
+            url: '/platform/usage-logs/common',
+            icon: FileText,
+          },
+          {
+            title: t('Task Logs'),
+            url: '/platform/usage-logs/task',
+            activeUrls: ['/platform/usage-logs/drawing'],
+            icon: ListTodo,
+          },
+          {
             title: t('Organizations'),
             url: '/platform/organizations',
             icon: Users,
@@ -180,14 +196,7 @@ export function useSidebarData(): SidebarData {
       },
     ],
   }
-  if (!hasTeamOrganizations) {
-    // Personal-only accounts keep the original navigation and admin entries.
-    data.navGroups = data.navGroups.map((group) => ({
-      ...group,
-      items: group.items.filter(
-        (item) => item.url !== '/platform/organizations'
-      ),
-    }))
+  if (!isTeam) {
     data.navGroups
       .find((group) => group.id === 'personal')
       ?.items.push({
@@ -195,16 +204,13 @@ export function useSidebarData(): SidebarData {
         url: '/organization/settings',
         icon: Settings,
       })
-  } else if (!platform) {
-    data.navGroups = data.navGroups
-      .filter((group) => group.id !== 'admin')
-      .map((group) => ({
-        ...group,
-        items: group.items.filter(
-          (item) =>
-            item.url !== '/wallet' || capabilities?.['org.billing']?.read
-        ),
-      }))
+  } else {
+    data.navGroups = data.navGroups.map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => item.url !== '/wallet' || capabilities?.['org.billing']?.read
+      ),
+    }))
     data.navGroups.splice(2, 0, {
       id: 'organization',
       title: t('Organization'),

@@ -32,6 +32,14 @@ import { useOrganization } from './context'
 export function OrganizationPage(props: { section: string }) {
   const { t } = useTranslation()
   const context = useOrganization()
+  if (
+    context.organization.kind === 'personal' &&
+    props.section !== 'settings'
+  ) {
+    return (
+      <Navigate to='/dashboard/$section' params={{ section: 'overview' }} />
+    )
+  }
   let title = t('Members')
   let content = <Members />
   let permitted = true

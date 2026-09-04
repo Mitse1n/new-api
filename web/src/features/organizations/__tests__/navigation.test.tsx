@@ -38,6 +38,7 @@ import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 
 import { useSidebarData } from '@/hooks/use-sidebar-data'
+import { useSidebarView } from '@/hooks/use-sidebar-view'
 import { useAuthStore } from '@/stores/auth-store'
 import { useOrganizationStore } from '@/stores/organization-store'
 
@@ -161,7 +162,7 @@ test('personal-only accounts retain original navigation and a first-organization
   expect(urls).toContain('/channels')
   expect(urls).toContain('/wallet')
   expect(urls).toContain('/organization/settings')
-  expect(urls).not.toContain('/platform/organizations')
+  expect(urls).toContain('/platform/organizations')
 })
 
 test('personal-only accounts do not see the organization summary panel', () => {
@@ -175,23 +176,35 @@ test('personal-only accounts do not see the organization summary panel', () => {
   expect(screen.queryByText('My remaining limit')).not.toBeInTheDocument()
 })
 
-test('joining and leaving the last team updates organization navigation', async () => {
+test('personal and team selection preserve admin navigation and show team tools only for teams', async () => {
   const { result } = renderHook(
     () => ({ sidebar: useSidebarData(), hasTeam: useHasTeamOrganizations() }),
     { wrapper: Wrapper }
   )
   await act(async () => {
     client.setQueryData(listKey, [personal, team])
+    const context = useOrganizationStore.getState().context
+    if (!context) throw new Error('Missing test organization context')
+    useOrganizationStore.setState({
+      activeOrgID: team.id,
+      context: { ...context, organization: team },
+    })
   })
   await waitFor(() => expect(result.current.hasTeam).toBe(true))
   expect(result.current.sidebar.navGroups.map((group) => group.id)).toContain(
     'organization'
   )
-  expect(
-    result.current.sidebar.navGroups.map((group) => group.id)
-  ).not.toContain('admin')
+  expect(result.current.sidebar.navGroups.map((group) => group.id)).toContain(
+    'admin'
+  )
   await act(async () => {
     client.setQueryData(listKey, [personal])
+    const context = useOrganizationStore.getState().context
+    if (!context) throw new Error('Missing test organization context')
+    useOrganizationStore.setState({
+      activeOrgID: personal.id,
+      context: { ...context, organization: personal },
+    })
   })
   await waitFor(() => expect(result.current.hasTeam).toBe(false))
   expect(
@@ -205,7 +218,15 @@ test('the team switcher labels the personal section Personal and does not offer 
   fireEvent.click(
     await screen.findByRole('button', { name: 'Switch organization' })
   )
-  expect(await screen.findByText('Personal', { exact: true })).toBeVisible()
+  expect(await screen.findByRole('button', { name: 'Personal' })).toBeVisible()
+  expect(screen.queryByText('personal-1')).not.toBeInTheDocument()
+  expect(screen.queryByText('Personal account')).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Platform administration' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Return to organization' })
+  ).not.toBeInTheDocument()
   expect(screen.queryByText('Personal organizations')).not.toBeInTheDocument()
   expect(
     screen.queryByRole('button', { name: 'Create organization' })
@@ -227,4 +248,56 @@ test('personal settings open the first-organization creation form without team b
     screen.queryByRole('button', { name: 'Save changes' })
   ).not.toBeInTheDocument()
   expect(screen.queryByText('Danger zone')).not.toBeInTheDocument()
+})
+
+function NavigationLinks() {
+  const { navGroups } = useSidebarView()
+  return (
+    <nav>
+      {navGroups.flatMap((group) =>
+        group.items.map((item) => (
+          <a key={String(item.url)} href={String(item.url)}>
+            {item.title}
+          </a>
+        ))
+      )}
+    </nav>
+  )
+}
+
+test.each([10, 100])(
+  'platform role %s sees administrator entries while a team is selected',
+  async (role) => {
+    useAuthStore.getState().auth.setUser({ id: 1, username: 'admin', role })
+    const context = useOrganizationStore.getState().context
+    if (!context) throw new Error('Missing test organization context')
+    useOrganizationStore.setState({
+      activeOrgID: team.id,
+      context: { ...context, organization: team },
+    })
+    client.setQueryData(['status'], {})
+    renderPage(NavigationLinks)
+    expect(await screen.findByRole('link', { name: 'Channels' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Organizations' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Members' })).toBeVisible()
+  }
+)
+
+test('team ownership does not grant a regular user platform navigation', async () => {
+  useAuthStore.getState().auth.setUser({ id: 1, username: 'owner', role: 1 })
+  const context = useOrganizationStore.getState().context
+  if (!context) throw new Error('Missing test organization context')
+  useOrganizationStore.setState({
+    activeOrgID: team.id,
+    context: { ...context, organization: team },
+  })
+  client.setQueryData(['status'], {})
+  renderPage(NavigationLinks)
+  expect(await screen.findByRole('link', { name: 'Members' })).toBeVisible()
+  expect(
+    screen.queryByRole('link', { name: 'Channels' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('link', { name: 'Organizations' })
+  ).not.toBeInTheDocument()
 })

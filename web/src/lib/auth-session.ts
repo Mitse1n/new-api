@@ -194,7 +194,6 @@ export function clearAuthentication(
     userID: null,
     activeOrgID: null,
     context: null,
-    platform: false,
     epoch: state.epoch + 1,
   }))
   useAuthStore.getState().auth.reset(bootstrapState)

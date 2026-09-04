@@ -18,18 +18,26 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
+import { PlatformViewContext } from '@/features/organizations/platform-view'
 import { UsageLogs } from '@/features/usage-logs'
 import { usageLogsSearchSchema } from '@/features/usage-logs/search-schema'
 import {
   isUsageLogsSectionId,
   USAGE_LOGS_DEFAULT_SECTION,
 } from '@/features/usage-logs/section-registry'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
-export const Route = createFileRoute('/_authenticated/usage-logs/$section')({
+export const Route = createFileRoute(
+  '/_authenticated/platform/usage-logs/$section'
+)({
   beforeLoad: ({ params, search }) => {
+    if ((useAuthStore.getState().auth.user?.role ?? 0) < ROLE.ADMIN) {
+      throw redirect({ to: '/403' })
+    }
     if (!isUsageLogsSectionId(params.section)) {
       throw redirect({
-        to: '/usage-logs/$section',
+        to: '/platform/usage-logs/$section',
         params: { section: USAGE_LOGS_DEFAULT_SECTION },
       })
     }
@@ -39,7 +47,7 @@ export const Route = createFileRoute('/_authenticated/usage-logs/$section')({
       : search?.type != null && search.type !== ''
     if (params.section !== 'common' && hasTypeSearch) {
       throw redirect({
-        to: '/usage-logs/$section',
+        to: '/platform/usage-logs/$section',
         params: { section: params.section },
         search: { ...search, type: undefined },
         replace: true,
@@ -47,5 +55,9 @@ export const Route = createFileRoute('/_authenticated/usage-logs/$section')({
     }
   },
   validateSearch: usageLogsSearchSchema,
-  component: UsageLogs,
+  component: () => (
+    <PlatformViewContext.Provider value>
+      <UsageLogs />
+    </PlatformViewContext.Provider>
+  ),
 })

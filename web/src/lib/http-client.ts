@@ -123,9 +123,7 @@ api.interceptors.response.use(
       error?.response?.data?.code === 'ORG_UNAVAILABLE'
     ) {
       useOrganizationStore.getState().select(null)
-      toast.error(
-        t('Organization unavailable. Returning to your personal organization.')
-      )
+      toast.error(t('Organization unavailable. Returning to Personal.'))
       throw new CanceledError('Organization unavailable')
     }
     if (
@@ -133,7 +131,7 @@ api.interceptors.response.use(
       error?.response?.data?.code === 'ORG_FORBIDDEN'
     ) {
       const current = useOrganizationStore.getState()
-      current.select(current.activeOrgID, current.platform)
+      current.select(current.activeOrgID)
     }
     const skipErrorHandler = config?.skipErrorHandler
     const status = error?.response?.status

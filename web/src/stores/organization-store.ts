@@ -24,10 +24,9 @@ type OrganizationState = {
   userID: number | null
   activeOrgID: number | null
   epoch: number
-  platform: boolean
   context: OrganizationContext | null
   bindUser: (userID: number) => void
-  select: (orgID: number | null, platform?: boolean) => void
+  select: (orgID: number | null) => void
   setContext: (context: OrganizationContext, epoch: number) => void
 }
 
@@ -37,7 +36,6 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
   userID: null,
   activeOrgID: null,
   epoch: 0,
-  platform: false,
   context: null,
   bindUser: (userID) => {
     if (get().userID === userID) return
@@ -52,11 +50,10 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
       userID,
       activeOrgID: selected,
       context: null,
-      platform: false,
       epoch: get().epoch + 1,
     })
   },
-  select: (activeOrgID, platform = false) => {
+  select: (activeOrgID) => {
     const state = get()
     try {
       const key = `new-api:org:v1:${state.userID}`
@@ -65,7 +62,7 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
     } catch {
       /* The current session still works without persistence. */
     }
-    set({ activeOrgID, platform, context: null, epoch: state.epoch + 1 })
+    set({ activeOrgID, context: null, epoch: state.epoch + 1 })
   },
   setContext: (context, epoch) => {
     if (

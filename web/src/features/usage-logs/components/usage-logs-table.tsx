@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { getRouteApi } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -27,6 +26,7 @@ import {
   DataTableRow,
   useDataTable,
 } from '@/components/data-table'
+import { useUsageLogsRoute } from '@/features/usage-logs/route'
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { cn } from '@/lib/utils'
@@ -44,8 +44,6 @@ import { CommonLogsFilterBar } from './common-logs-filter-bar'
 import { TaskLogsFilterBar } from './task-logs-filter-bar'
 import { UsageLogsMobileList } from './usage-logs-mobile-card'
 import { useLogsViewScope, type LogsViewAccess } from './usage-logs-provider'
-
-const route = getRouteApi('/_authenticated/usage-logs/$section')
 
 const logTypeRowTint: Record<number, string> = {
   [LOG_TYPE_ENUM.ERROR]: 'bg-rose-50/40 dark:bg-rose-950/20',
@@ -78,8 +76,10 @@ interface UsageLogsTableProps {
 }
 
 export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
+  const route = useUsageLogsRoute()
   const { t } = useTranslation()
   const {
+    platform,
     isAdminView: isAdmin,
     isRootView: isRoot,
     viewAccess,
@@ -128,6 +128,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const { data, isLoading, isFetching } = useQuery({
     queryKey: [
       'logs',
+      platform,
       logCategory,
       viewAccess,
       pagination.pageIndex + 1,
@@ -139,6 +140,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     queryFn: async () => {
       const result = await fetchLogsByCategory({
         logCategory,
+        platform,
         isAdmin,
         page: pagination.pageIndex + 1,
         pageSize: pagination.pageSize,
@@ -155,8 +157,9 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     },
     placeholderData: (previousData, previousQuery) => {
       if (
-        previousQuery?.queryKey[1] === logCategory &&
-        previousQuery.queryKey[2] === viewAccess
+        previousQuery?.queryKey[1] === platform &&
+        previousQuery.queryKey[2] === logCategory &&
+        previousQuery.queryKey[3] === viewAccess
       ) {
         return previousData
       }

@@ -16,14 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { getRouteApi, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import type { NavGroup } from '@/components/layout/types'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { usePlatformView } from '@/features/organizations/platform-view'
 import { CacheStatsDialog } from '@/features/system-settings/general/channel-affinity/cache-stats-dialog'
+import { useUsageLogsRoute } from '@/features/usage-logs/route'
 import { useSidebarConfig } from '@/hooks/use-sidebar-config'
 
 import { UserInfoDialog } from './components/dialogs/user-info-dialog'
@@ -40,7 +42,6 @@ import {
   type UsageLogsSectionId,
 } from './section-registry'
 
-const route = getRouteApi('/_authenticated/usage-logs/$section')
 const TASK_LOG_SECTIONS = ['drawing', 'task'] as const
 
 const SECTION_META: Record<UsageLogsSectionId, { titleKey: string }> = {
@@ -56,6 +57,8 @@ const SECTION_META: Record<UsageLogsSectionId, { titleKey: string }> = {
 }
 
 function UsageLogsContent() {
+  const platform = usePlatformView()
+  const route = useUsageLogsRoute()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const params = route.useParams()
@@ -101,11 +104,11 @@ function UsageLogsContent() {
   const handleSectionChange = useCallback(
     (section: string) => {
       void navigate({
-        to: '/usage-logs/$section',
+        to: platform ? '/platform/usage-logs/$section' : '/usage-logs/$section',
         params: { section: section as UsageLogsSectionId },
       })
     },
-    [navigate]
+    [navigate, platform]
   )
 
   const handleViewScopeChange = useCallback(

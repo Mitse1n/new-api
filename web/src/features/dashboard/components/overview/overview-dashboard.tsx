@@ -51,13 +51,13 @@ import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
 import type { ApiKey } from '@/features/keys/types'
 import { getOrganizationSummary } from '@/features/organizations/api'
 import { useOrganization } from '@/features/organizations/context'
+import { usePlatformView } from '@/features/organizations/platform-view'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { getUserModels } from '@/lib/api'
 import { MOTION_TRANSITION } from '@/lib/motion'
 import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
-import { useOrganizationStore } from '@/stores/organization-store'
 
 import {
   useApiInfo,
@@ -480,7 +480,7 @@ export function OverviewDashboard() {
   const requestCount = Number(orgSummary.data?.request_count ?? 0)
   const remainQuota = Number(orgSummary.data?.available_quota ?? 0)
   const usedQuota = Number(orgSummary.data?.used_quota ?? 0)
-  const platform = useOrganizationStore((state) => state.platform)
+  const platform = usePlatformView()
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN) && platform
 
   const apiKeysQuery = useQuery({

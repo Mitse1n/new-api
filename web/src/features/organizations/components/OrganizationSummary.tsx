@@ -27,15 +27,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatQuotaWithCurrency } from '@/lib/currency'
-import { useOrganizationStore } from '@/stores/organization-store'
 
 import { getOrganizationSummary, organizationMutation } from '../api'
-import { useHasTeamOrganizations, useOrganization } from '../context'
+import { useOrganization } from '../context'
+import { usePlatformView } from '../platform-view'
 
 export function OrganizationSummary() {
   const { t } = useTranslation()
   const context = useOrganization()
-  const hasTeamOrganizations = useHasTeamOrganizations()
   const client = useQueryClient()
   const [confirmTransfer, setConfirmTransfer] = useState(false)
   const accept = useMutation({
@@ -46,13 +45,12 @@ export function OrganizationSummary() {
       void client.invalidateQueries({ queryKey: ['organization-members'] })
     },
   })
-  const platform = useOrganizationStore((state) => state.platform)
+  const platform = usePlatformView()
   const summary = useQuery({
     queryKey: ['organization-summary', context.organization.id],
     queryFn: getOrganizationSummary,
-    enabled: !platform && hasTeamOrganizations,
+    enabled: !platform && context.organization.kind === 'team',
   })
-  if (!hasTeamOrganizations) return null
   if (platform) {
     return (
       <div className='bg-muted/30 rounded-xl border px-4 py-3 text-sm'>
@@ -61,6 +59,7 @@ export function OrganizationSummary() {
       </div>
     )
   }
+  if (context.organization.kind === 'personal') return null
   const data = summary.data
   const roleLabels = {
     owner: t('Owner'),

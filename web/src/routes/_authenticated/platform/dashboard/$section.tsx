@@ -19,20 +19,32 @@ For commercial licensing, please contact support@quantumnous.com
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 import { Dashboard } from '@/features/dashboard'
-import {
-  DASHBOARD_SECTION_IDS,
-  DASHBOARD_DEFAULT_SECTION,
-} from '@/features/dashboard/section-registry'
+import { DASHBOARD_SECTION_IDS } from '@/features/dashboard/section-registry'
+import { PlatformViewContext } from '@/features/organizations/platform-view'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
-export const Route = createFileRoute('/_authenticated/dashboard/$section')({
+export const Route = createFileRoute(
+  '/_authenticated/platform/dashboard/$section'
+)({
   beforeLoad: ({ params }) => {
+    if ((useAuthStore.getState().auth.user?.role ?? 0) < ROLE.ADMIN) {
+      throw redirect({ to: '/403' })
+    }
     const validSections = DASHBOARD_SECTION_IDS as unknown as string[]
-    if (!validSections.includes(params.section) || params.section === 'users') {
+    if (
+      !validSections.includes(params.section) ||
+      params.section === 'overview'
+    ) {
       throw redirect({
-        to: '/dashboard/$section',
-        params: { section: DASHBOARD_DEFAULT_SECTION },
+        to: '/platform/dashboard/$section',
+        params: { section: 'models' },
       })
     }
   },
-  component: Dashboard,
+  component: () => (
+    <PlatformViewContext.Provider value>
+      <Dashboard />
+    </PlatformViewContext.Provider>
+  ),
 })

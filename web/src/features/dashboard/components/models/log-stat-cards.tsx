@@ -32,12 +32,12 @@ import type {
   QuotaDataItem,
   DashboardFilters,
 } from '@/features/dashboard/types'
+import { usePlatformView } from '@/features/organizations/platform-view'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatCompactNumber, formatNumber, formatQuota } from '@/lib/format'
 import { computeTimeRange } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
-import { useOrganizationStore } from '@/stores/organization-store'
 
 interface LogStatCardsProps {
   filters?: DashboardFilters
@@ -63,7 +63,7 @@ export function LogStatCards(props: LogStatCardsProps) {
   const { i18n } = useTranslation()
   const statCardsConfig = useModelStatCardsConfig()
   const user = useAuthStore((state) => state.auth.user)
-  const platform = useOrganizationStore((state) => state.platform)
+  const platform = usePlatformView()
   const isAdmin = !!(user?.role && user.role >= 10) && platform
   const [stats, setStats] = useState<{
     totalQuota: number

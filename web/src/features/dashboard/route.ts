@@ -16,23 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { getRouteApi } from '@tanstack/react-router'
 
-import { Dashboard } from '@/features/dashboard'
-import {
-  DASHBOARD_SECTION_IDS,
-  DASHBOARD_DEFAULT_SECTION,
-} from '@/features/dashboard/section-registry'
+import { usePlatformView } from '@/features/organizations/platform-view'
 
-export const Route = createFileRoute('/_authenticated/dashboard/$section')({
-  beforeLoad: ({ params }) => {
-    const validSections = DASHBOARD_SECTION_IDS as unknown as string[]
-    if (!validSections.includes(params.section) || params.section === 'users') {
-      throw redirect({
-        to: '/dashboard/$section',
-        params: { section: DASHBOARD_DEFAULT_SECTION },
-      })
-    }
-  },
-  component: Dashboard,
-})
+const personalRoute = getRouteApi('/_authenticated/dashboard/$section')
+const platformRoute = getRouteApi('/_authenticated/platform/dashboard/$section')
+
+export function useDashboardRoute() {
+  return usePlatformView() ? platformRoute : personalRoute
+}

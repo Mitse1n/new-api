@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient, useIsFetching } from '@tanstack/react-query'
-import { useNavigate, getRouteApi } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import type { Table } from '@tanstack/react-table'
 import { Eye, EyeOff } from 'lucide-react'
 import { useState, useCallback, useMemo } from 'react'
@@ -37,6 +37,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { usePlatformView } from '@/features/organizations/platform-view'
+import { useUsageLogsRoute } from '@/features/usage-logs/route'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
 import { buildSearchParams } from '../lib/filter'
@@ -50,8 +52,6 @@ import {
   LogsFilterToolbar,
 } from './logs-filter-toolbar'
 import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
-
-const route = getRouteApi('/_authenticated/usage-logs/$section')
 
 type LogTypeValue = (typeof LOG_TYPE_FILTERS)[number]['value']
 const logTypeValueSet = new Set<string>(
@@ -112,6 +112,8 @@ interface CommonLogsFilterBarProps<TData> {
 export function CommonLogsFilterBar<TData>(
   props: CommonLogsFilterBarProps<TData>
 ) {
+  const platform = usePlatformView()
+  const route = useUsageLogsRoute()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -188,7 +190,7 @@ export function CommonLogsFilterBar<TData>(
   const handleApply = useCallback(() => {
     const filterParams = buildSearchParams(filters, 'common')
     navigate({
-      to: '/usage-logs/$section',
+      to: platform ? '/platform/usage-logs/$section' : '/usage-logs/$section',
       params: { section: 'common' },
       search: {
         ...filterParams,
@@ -198,7 +200,7 @@ export function CommonLogsFilterBar<TData>(
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
-  }, [filters, logType, navigate, queryClient])
+  }, [filters, logType, navigate, platform, queryClient])
 
   const handleReset = useCallback(() => {
     const { start, end } = getDefaultTimeRange()
@@ -215,7 +217,7 @@ export function CommonLogsFilterBar<TData>(
     })
 
     navigate({
-      to: '/usage-logs/$section',
+      to: platform ? '/platform/usage-logs/$section' : '/usage-logs/$section',
       params: { section: 'common' },
       search: {
         page: 1,
@@ -224,7 +226,7 @@ export function CommonLogsFilterBar<TData>(
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
-  }, [navigate, queryClient])
+  }, [navigate, platform, queryClient])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

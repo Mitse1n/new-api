@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { getRouteApi, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { Eye, EyeOff } from 'lucide-react'
 import { useState, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -31,7 +31,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useDashboardRoute } from '@/features/dashboard/route'
 import { OrganizationSummary } from '@/features/organizations/components/OrganizationSummary'
+import { usePlatformView } from '@/features/organizations/platform-view'
 import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
@@ -59,8 +61,6 @@ import type {
   QuotaDataItem,
   UserChartsFilters,
 } from './types'
-
-const route = getRouteApi('/_authenticated/dashboard/$section')
 
 const LOG_STAT_CARD_FALLBACK_KEYS = [
   'count',
@@ -194,6 +194,7 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
 }
 
 export function Dashboard() {
+  const route = useDashboardRoute()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const params = route.useParams()
@@ -246,7 +247,10 @@ export function Dashboard() {
   )
 
   const meta = SECTION_META[activeSection] ?? SECTION_META.overview
-  const platform = useOrganizationStore((state) => state.platform)
+  const isTeam = useOrganizationStore(
+    (state) => state.context?.organization.kind === 'team'
+  )
+  const platform = usePlatformView()
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN) && platform
   const visibleSections = useMemo(
     () =>
@@ -258,11 +262,11 @@ export function Dashboard() {
   const handleSectionChange = useCallback(
     (section: string) => {
       void navigate({
-        to: '/dashboard/$section',
+        to: platform ? '/platform/dashboard/$section' : '/dashboard/$section',
         params: { section: section as DashboardSectionId },
       })
     },
-    [navigate]
+    [navigate, platform]
   )
   const showSectionTabs =
     activeSection !== 'overview' && visibleSections.length > 1
@@ -324,9 +328,11 @@ export function Dashboard() {
     <SectionPageLayout>
       <SectionPageLayout.Title>{t(meta.titleKey)}</SectionPageLayout.Title>
       <SectionPageLayout.Content>
-        <div className='px-4 pb-4'>
-          <OrganizationSummary />
-        </div>
+        {(platform || isTeam) && (
+          <div className='px-4 pb-4'>
+            <OrganizationSummary />
+          </div>
+        )}
         <div className='space-y-3 sm:space-y-4'>
           {activeSection !== 'overview' && (
             <div className='flex flex-wrap items-center justify-between gap-1.5 sm:gap-2'>
@@ -396,7 +402,7 @@ export function Dashboard() {
               </FadeIn>
             </>
           )}
-          {activeSection === 'users' && (
+          {activeSection === 'users' && isAdmin && (
             <FadeIn>
               <Suspense fallback={<ModelChartsFallback />}>
                 <LazyUserCharts

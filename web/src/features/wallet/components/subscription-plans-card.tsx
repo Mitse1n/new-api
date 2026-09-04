@@ -544,7 +544,7 @@ export function SubscriptionPlansCard({
                 audience = t('Team organizations')
               }
               if (plan.audience === 'personal') {
-                audience = t('Personal organizations')
+                audience = t('Personal')
               }
               const benefits = [
                 `${t('Validity Period')}: ${formatDuration(plan, t)}`,

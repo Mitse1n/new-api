@@ -22,8 +22,7 @@ const serverErrorMessageKeys = {
   ORG_INVITE_PENDING:
     'An invitation is already pending. Resend it from the invitation list.',
   ORG_INTERNAL: 'Request failed',
-  ORG_UNAVAILABLE:
-    'Organization unavailable. Returning to your personal organization.',
+  ORG_UNAVAILABLE: 'Organization unavailable. Returning to Personal.',
   ORG_FORBIDDEN: 'You do not have permission for this action.',
   ORG_INVALID: 'Invalid organization details',
   ORG_INVITE: 'Invitation unavailable or identity does not match',

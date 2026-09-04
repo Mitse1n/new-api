@@ -84,6 +84,7 @@ import type {
   FlowOverflowMode,
   FlowRole,
 } from '@/features/dashboard/types'
+import { usePlatformView } from '@/features/organizations/platform-view'
 import { formatQuota } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 import { computeTimeRange } from '@/lib/time'
@@ -91,7 +92,6 @@ import { useChartTheme } from '@/lib/use-chart-theme'
 import { cn } from '@/lib/utils'
 import { VCHART_OPTION } from '@/lib/vchart'
 import { useAuthStore } from '@/stores/auth-store'
-import { useOrganizationStore } from '@/stores/organization-store'
 
 import { FlowNodeFilterControl } from './flow-node-filter'
 
@@ -259,7 +259,7 @@ export function FlowCharts(props: FlowChartsProps) {
   const chartInstanceRef = useRef<IVChart | null>(null)
   const user = useAuthStore((state) => state.auth.user)
   const isRoot = Boolean(user?.role && user.role >= ROLE.SUPER_ADMIN)
-  const platform = useOrganizationStore((state) => state.platform)
+  const platform = usePlatformView()
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN) && platform
   let flowRole: FlowRole = 'user'
   if (isRoot) {

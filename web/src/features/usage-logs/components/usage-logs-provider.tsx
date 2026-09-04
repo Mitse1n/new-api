@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, type ReactNode } from 'react'
 
+import { usePlatformView } from '@/features/organizations/platform-view'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 import { useOrganizationStore } from '@/stores/organization-store'
@@ -104,10 +105,12 @@ export function useUsageLogsContext() {
  */
 export function useLogsViewScope() {
   const role = useAuthStore((state) => state.auth.user?.role ?? ROLE.GUEST)
-  const platform = useOrganizationStore((state) => state.platform)
+  const platform = usePlatformView()
   const { viewScope, setViewScope } = useUsageLogsContext()
   const orgManage = useOrganizationStore(
-    (state) => !!state.context?.capabilities.org['org.usage']?.read_all
+    (state) =>
+      state.context?.organization.kind === 'team' &&
+      !!state.context.capabilities.org['org.usage']?.read_all
   )
   const canManageScope = platform ? role >= ROLE.ADMIN : orgManage
   let scopeRole: number = orgManage ? ROLE.ADMIN : ROLE.USER
@@ -117,6 +120,7 @@ export function useLogsViewScope() {
   const isRootView = viewAccess === 'root'
 
   return {
+    platform,
     canManageScope,
     viewScope,
     setViewScope,

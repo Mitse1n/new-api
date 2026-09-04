@@ -17,10 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { getRouteApi } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/ui/skeleton'
+import { useUsageLogsRoute } from '@/features/usage-logs/route'
 import { formatLogQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -28,8 +28,6 @@ import { getLogStats, getUserLogStats } from '../api'
 import { DEFAULT_LOG_STATS } from '../constants'
 import { buildApiParams } from '../lib/utils'
 import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
-
-const route = getRouteApi('/_authenticated/usage-logs/$section')
 
 function StatBadge(props: {
   label: string
@@ -48,13 +46,14 @@ function StatBadge(props: {
 }
 
 export function CommonLogsStats() {
+  const route = useUsageLogsRoute()
   const { t } = useTranslation()
-  const { isAdminView: isAdmin } = useLogsViewScope()
+  const { isAdminView: isAdmin, platform } = useLogsViewScope()
   const searchParams = route.useSearch()
   const { sensitiveVisible } = useUsageLogsContext()
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['usage-logs-stats', isAdmin, searchParams],
+    queryKey: ['usage-logs-stats', platform, isAdmin, searchParams],
     queryFn: async () => {
       const params = buildApiParams({
         page: 1,
@@ -65,14 +64,18 @@ export function CommonLogsStats() {
       })
 
       const result = isAdmin
-        ? await getLogStats(params)
-        : await getUserLogStats(params)
+        ? await getLogStats(params, platform)
+        : await getUserLogStats(params, platform)
 
       return result.success
         ? result.data || DEFAULT_LOG_STATS
         : DEFAULT_LOG_STATS
     },
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData, previousQuery) =>
+      previousQuery?.queryKey[1] === platform &&
+      previousQuery.queryKey[2] === isAdmin
+        ? previousData
+        : undefined,
   })
 
   if (isLoading) {

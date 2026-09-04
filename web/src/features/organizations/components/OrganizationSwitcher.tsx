@@ -20,6 +20,7 @@ import {
   ArrowDown01Icon,
   Tick02Icon,
   Building03Icon,
+  UserIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -49,7 +50,6 @@ export function OrganizationSwitcher() {
   const switchOrg = useSwitchOrganization()
   const userID = useAuthStore((state) => state.auth.user?.id)
   const epoch = useOrganizationStore((state) => state.epoch)
-  const platform = useOrganizationStore((state) => state.platform)
   const list = useQuery({
     queryKey: ['organizations', userID, epoch],
     queryFn: listOrganizations,
@@ -60,9 +60,6 @@ export function OrganizationSwitcher() {
     admin: t('Admin'),
     member: t('Member'),
   }
-  const canEnterPlatform = Object.values(context.capabilities.platform).some(
-    (actions) => Object.values(actions).some(Boolean)
-  )
   const restore = useMutation({
     mutationFn: (id: number) => changeOrganizationStatus(id, 1),
     onSuccess: () => {
@@ -83,20 +80,31 @@ export function OrganizationSwitcher() {
         }
       >
         <span className='mt-org-icon blue'>
-          {context.logo && !platform ? (
+          {context.logo && context.organization.kind === 'team' ? (
             <img
               src={context.logo}
               alt=''
               className='size-5 rounded object-contain'
             />
           ) : (
-            <HugeiconsIcon icon={Building03Icon} size={18} />
+            <HugeiconsIcon
+              icon={
+                context.organization.kind === 'personal'
+                  ? UserIcon
+                  : Building03Icon
+              }
+              size={18}
+            />
           )}
         </span>
         <span className='mt-org-name'>
-          {platform ? t('Platform administration') : context.organization.name}
+          {context.organization.kind === 'personal'
+            ? t('Personal')
+            : context.organization.name}
         </span>
-        <Badge variant='outline'>{roleLabels[context.membership.role]}</Badge>
+        {context.organization.kind === 'team' && (
+          <Badge variant='outline'>{roleLabels[context.membership.role]}</Badge>
+        )}
         <HugeiconsIcon icon={ArrowDown01Icon} size={16} />
       </PopoverTrigger>
       <PopoverContent align='start' className='mt-org-popover'>
@@ -116,62 +124,67 @@ export function OrganizationSwitcher() {
               .filter(
                 (o) =>
                   o.kind === kind &&
-                  o.name.toLowerCase().includes(search.toLowerCase())
+                  (o.kind === 'personal' ? t('Personal') : o.name)
+                    .toLowerCase()
+                    .includes(search.toLowerCase())
               )
-              .map((org) => (
-                <button
-                  type='button'
-                  className='mt-org-option'
-                  aria-label={
-                    org.status === 1
-                      ? org.name
-                      : t('Restore {{name}}', { name: org.name })
-                  }
-                  disabled={restore.isPending}
-                  key={org.id}
-                  onClick={() => {
-                    if (org.status !== 1) {
-                      restore.mutate(org.id)
-                      return
+              .map((org) => {
+                const name = org.kind === 'personal' ? t('Personal') : org.name
+                return (
+                  <button
+                    type='button'
+                    className='mt-org-option'
+                    aria-label={
+                      org.status === 1
+                        ? name
+                        : t('Restore {{name}}', {
+                            name,
+                          })
                     }
-                    switchOrg(org.id)
-                    setOpen(false)
-                    setSearch('')
-                    toast.success(t('Switched to {{name}}', { name: org.name }))
-                  }}
-                >
-                  <span className='mt-org-icon blue'>
-                    <HugeiconsIcon icon={Building03Icon} size={18} />
-                  </span>
-                  <span>
-                    <strong>{org.name}</strong>
-                    <small>
-                      {org.slug} ·{' '}
-                      {org.status === 1
-                        ? roleLabels[org.role]
-                        : t('Disabled — click to restore')}
-                    </small>
-                  </span>
-                  {!platform && org.id === context.organization.id && (
-                    <HugeiconsIcon icon={Tick02Icon} size={16} />
-                  )}
-                </button>
-              ))}
+                    disabled={restore.isPending}
+                    key={org.id}
+                    onClick={() => {
+                      if (org.status !== 1) {
+                        restore.mutate(org.id)
+                        return
+                      }
+                      switchOrg(org.id)
+                      setOpen(false)
+                      setSearch('')
+                      toast.success(
+                        t('Switched to {{name}}', {
+                          name,
+                        })
+                      )
+                    }}
+                  >
+                    <span className='mt-org-icon blue'>
+                      <HugeiconsIcon
+                        icon={
+                          org.kind === 'personal' ? UserIcon : Building03Icon
+                        }
+                        size={18}
+                      />
+                    </span>
+                    <span>
+                      <strong>{name}</strong>
+                      {org.kind === 'team' && (
+                        <small>
+                          {org.slug} ·{' '}
+                          {org.status === 1
+                            ? roleLabels[org.role]
+                            : t('Disabled — click to restore')}
+                        </small>
+                      )}
+                    </span>
+                    {org.id === context.organization.id && (
+                      <HugeiconsIcon icon={Tick02Icon} size={16} />
+                    )}
+                  </button>
+                )
+              })}
           </div>
         ))}
-        {canEnterPlatform && (
-          <Button
-            variant='ghost'
-            onClick={() => {
-              switchOrg(context.organization.id, !platform)
-              setOpen(false)
-            }}
-          >
-            {platform
-              ? t('Return to organization')
-              : t('Platform administration')}
-          </Button>
-        )}
       </PopoverContent>
     </Popover>
   )
