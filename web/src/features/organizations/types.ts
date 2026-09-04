@@ -60,7 +60,6 @@ export type OrganizationInvite = {
   id: number
   username: string
   invitee_id: number
-  email?: string
   role: 'admin' | 'member'
   status: 'pending' | 'accepted' | 'expired' | 'revoked' | 'declined'
   expires_at: number

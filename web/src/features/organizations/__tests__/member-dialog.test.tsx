@@ -139,7 +139,7 @@ test('an empty invitation username shows a validation error without sending a re
   expect(requests).toHaveLength(0)
 })
 
-test('a successful invitation sends the username to the team and closes without a link', async () => {
+test('a successful invitation sends the username to the team and closes the dialog', async () => {
   const close = vi.fn()
   renderDialog({ close })
   fireEvent.change(screen.getByRole('textbox', { name: 'Username' }), {
@@ -147,9 +147,6 @@ test('a successful invitation sends the username to the team and closes without 
   })
   fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
   await waitFor(() => expect(close).toHaveBeenCalledOnce())
-  expect(
-    screen.queryByRole('textbox', { name: 'Invitation link' })
-  ).not.toBeInTheDocument()
   expect(requests).toHaveLength(1)
   expect(requests[0].headers['X-Org-Id']).toBe('10')
   expect(JSON.parse(requests[0].data)).toEqual({

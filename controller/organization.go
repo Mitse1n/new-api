@@ -27,8 +27,6 @@ func organizationError(c *gin.Context, err error) {
 		status, code, message = http.StatusBadRequest, "ORG_INVALID", "Invalid organization details"
 	case errors.Is(err, model.ErrOrganizationInviteUser):
 		status, code, message = http.StatusBadRequest, "ORG_INVITE_USER", "No active account matches this username."
-	case errors.Is(err, model.ErrOrganizationInviteLegacy):
-		status, code, message = http.StatusBadRequest, "ORG_INVITE_LEGACY", "This email invitation is no longer supported. Ask an organization administrator to invite your username."
 	case errors.Is(err, model.ErrOrganizationInvite):
 		status, code, message = http.StatusBadRequest, "ORG_INVITE", "Invitation unavailable or identity does not match"
 	case errors.Is(err, model.ErrOrganizationSeats):

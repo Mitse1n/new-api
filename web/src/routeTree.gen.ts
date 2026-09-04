@@ -43,7 +43,6 @@ import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authentica
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
 import { Route as AuthenticatedOrganizationSectionRouteImport } from './routes/_authenticated/organization/$section'
-import { Route as AuthenticatedOrganizationInviteRouteImport } from './routes/_authenticated/organization/invite'
 import { Route as AuthenticatedPlatformOrganizationsRouteImport } from './routes/_authenticated/platform/organizations'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
@@ -250,12 +249,6 @@ const AuthenticatedOrganizationSectionRoute =
     path: '/organization/$section',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedOrganizationInviteRoute =
-  AuthenticatedOrganizationInviteRouteImport.update({
-    id: '/organization/invite',
-    path: '/organization/invite',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedPlatformOrganizationsRoute =
   AuthenticatedPlatformOrganizationsRouteImport.update({
     id: '/platform/organizations',
@@ -458,7 +451,6 @@ export interface FileRoutesByFullPath {
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/organization/$section': typeof AuthenticatedOrganizationSectionRoute
-  '/organization/invite': typeof AuthenticatedOrganizationInviteRoute
   '/platform/organizations': typeof AuthenticatedPlatformOrganizationsRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
@@ -521,7 +513,6 @@ export interface FileRoutesByTo {
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/organization/$section': typeof AuthenticatedOrganizationSectionRoute
-  '/organization/invite': typeof AuthenticatedOrganizationInviteRoute
   '/platform/organizations': typeof AuthenticatedPlatformOrganizationsRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
@@ -588,7 +579,6 @@ export interface FileRoutesById {
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
   '/_authenticated/organization/$section': typeof AuthenticatedOrganizationSectionRoute
-  '/_authenticated/organization/invite': typeof AuthenticatedOrganizationInviteRoute
   '/_authenticated/platform/organizations': typeof AuthenticatedPlatformOrganizationsRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
@@ -654,7 +644,6 @@ export interface FileRouteTypes {
     | '/errors/$error'
     | '/models/$section'
     | '/organization/$section'
-    | '/organization/invite'
     | '/platform/organizations'
     | '/usage-logs/$section'
     | '/channels/'
@@ -717,7 +706,6 @@ export interface FileRouteTypes {
     | '/errors/$error'
     | '/models/$section'
     | '/organization/$section'
-    | '/organization/invite'
     | '/platform/organizations'
     | '/usage-logs/$section'
     | '/channels'
@@ -783,7 +771,6 @@ export interface FileRouteTypes {
     | '/_authenticated/errors/$error'
     | '/_authenticated/models/$section'
     | '/_authenticated/organization/$section'
-    | '/_authenticated/organization/invite'
     | '/_authenticated/platform/organizations'
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/channels/'
@@ -1076,13 +1063,6 @@ declare module '@tanstack/react-router' {
       path: '/organization/$section'
       fullPath: '/organization/$section'
       preLoaderRoute: typeof AuthenticatedOrganizationSectionRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/organization/invite': {
-      id: '/_authenticated/organization/invite'
-      path: '/organization/invite'
-      fullPath: '/organization/invite'
-      preLoaderRoute: typeof AuthenticatedOrganizationInviteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/platform/organizations': {
@@ -1382,7 +1362,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
   AuthenticatedOrganizationSectionRoute: typeof AuthenticatedOrganizationSectionRoute
-  AuthenticatedOrganizationInviteRoute: typeof AuthenticatedOrganizationInviteRoute
   AuthenticatedPlatformOrganizationsRoute: typeof AuthenticatedPlatformOrganizationsRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
@@ -1411,7 +1390,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
   AuthenticatedOrganizationSectionRoute: AuthenticatedOrganizationSectionRoute,
-  AuthenticatedOrganizationInviteRoute: AuthenticatedOrganizationInviteRoute,
   AuthenticatedPlatformOrganizationsRoute:
     AuthenticatedPlatformOrganizationsRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,

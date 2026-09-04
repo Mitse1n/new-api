@@ -1,9 +1,6 @@
 package model
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -16,7 +13,6 @@ import (
 
 var ErrOrganizationInvite = errors.New("invitation unavailable or identity does not match")
 var ErrOrganizationMemberExists = errors.New("user is already an active organization member")
-var ErrOrganizationInviteLegacy = errors.New("legacy email invitation requires replacement")
 var ErrOrganizationInviteUser = errors.New("invited username is unavailable")
 var ErrOrganizationInvitePending = errors.New("an active invitation already exists")
 
@@ -87,14 +83,7 @@ func CreateOrganizationInvite(orgID, actorID int, username, role string) (*Organ
 	if username == "" || utf8.RuneCountInString(username) > 20 || (role != OrgRoleAdmin && role != OrgRoleMember) {
 		return nil, ErrOrganizationInput
 	}
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		return nil, err
-	}
-	// Retain the historical unique hash column for schema compatibility.
-	// Invitations are now addressed by ID and authorized by the recipient account.
-	hash := sha256.Sum256(secret)
-	invite := OrganizationInvite{OrgId: orgID, Username: username, Role: role, TokenHash: hex.EncodeToString(hash[:]), Status: "pending", InviterId: actorID, ExpiresAt: time.Now().Add(7 * 24 * time.Hour).Unix()}
+	invite := OrganizationInvite{OrgId: orgID, Username: username, Role: role, Status: "pending", InviterId: actorID, ExpiresAt: time.Now().Add(7 * 24 * time.Hour).Unix()}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		org, err := lockOrganizationManager(tx, orgID, actorID, false)
 		if err != nil {
@@ -177,9 +166,6 @@ func AcceptOrganizationInvite(userID, inviteID int) (int, error) {
 		}
 		if invite.Status != "pending" || invite.ExpiresAt <= common.GetTimestamp() {
 			return ErrOrganizationInvite
-		}
-		if invite.InviteeId == 0 {
-			return ErrOrganizationInviteLegacy
 		}
 		var user User
 		if err := tx.Where("id = ? AND status = ?", userID, common.UserStatusEnabled).First(&user).Error; err != nil {
@@ -300,9 +286,6 @@ func ResendOrganizationInvite(orgID, actorID, inviteID int) (*OrganizationInvite
 		}
 		if err := tx.Scopes(OrgScope(orgID)).Where("id = ? AND status = ?", inviteID, "pending").First(&invite).Error; err != nil {
 			return ErrOrganizationInvite
-		}
-		if invite.InviteeId == 0 {
-			return ErrOrganizationInviteLegacy
 		}
 		var target User
 		if err := tx.Where("id = ? AND status = ?", invite.InviteeId, common.UserStatusEnabled).First(&target).Error; err != nil {

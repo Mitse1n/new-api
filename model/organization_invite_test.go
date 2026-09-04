@@ -1,9 +1,6 @@
 package model
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -52,61 +49,6 @@ func TestOrganizationInviteBindsUsernameToAccountWithoutEmail(t *testing.T) {
 	require.NoError(t, err)
 	_, err = CreateOrganizationInvite(org.Id, users[0].Id, "renamed", OrgRoleMember)
 	assert.ErrorIs(t, err, ErrOrganizationMemberExists)
-}
-
-// The exact invitation schema deployed before username invitations (222b538f).
-type emailOrganizationInvite struct {
-	Id         int    `json:"id"`
-	OrgId      int    `gorm:"index:idx_org_invite;not null"`
-	Email      string `gorm:"type:varchar(254);not null"`
-	Role       string `gorm:"type:varchar(16);not null"`
-	TokenHash  string `gorm:"type:char(64);uniqueIndex;not null"`
-	Status     string `gorm:"type:varchar(16);not null"`
-	InviterId  int
-	AcceptedBy int
-	ExpiresAt  int64 `gorm:"type:bigint"`
-	CreatedAt  int64 `gorm:"autoCreateTime"`
-}
-
-func (emailOrganizationInvite) TableName() string { return "organization_invites" }
-
-func TestOrganizationInviteMigrationPreservesLegacyIdentityAndTokenUniqueness(t *testing.T) {
-	db := organizationTestDatabase(t)
-	users := []User{{Username: "owner", AffCode: "owner"}, {Username: "member@example.test", Email: "member@example.test", AffCode: "member"}}
-	require.NoError(t, db.Create(&users).Error)
-	org, err := CreateTeamOrganization(users[0].Id, "Team", "legacy-team")
-	require.NoError(t, err)
-	require.NoError(t, db.Migrator().DropTable(&OrganizationInvite{}))
-	require.NoError(t, db.AutoMigrate(&emailOrganizationInvite{}))
-	token := strings.Repeat("a", 64)
-	hash := sha256.Sum256([]byte(token))
-	legacy := emailOrganizationInvite{OrgId: org.Id, Email: users[1].Email, Role: OrgRoleMember, TokenHash: hex.EncodeToString(hash[:]), Status: "pending", InviterId: users[0].Id, ExpiresAt: common.GetTimestamp() + 3600}
-	require.NoError(t, db.Create(&legacy).Error)
-	for i := 0; i < 2; i++ {
-		require.NoError(t, db.AutoMigrate(&OrganizationInvite{}))
-	}
-	var migrated OrganizationInvite
-	require.NoError(t, db.First(&migrated, legacy.Id).Error)
-	assert.Equal(t, legacy.Email, migrated.Email)
-	assert.Equal(t, legacy.TokenHash, migrated.TokenHash)
-	assert.Equal(t, legacy.ExpiresAt, migrated.ExpiresAt)
-	assert.Equal(t, "pending", migrated.Status)
-	assert.Zero(t, migrated.InviteeId)
-	assert.Empty(t, migrated.Username)
-	assert.True(t, db.Migrator().HasIndex(&OrganizationInvite{}, "idx_org_invite"))
-	assert.True(t, db.Migrator().HasIndex(&OrganizationInvite{}, "idx_org_invite_recipient"))
-	duplicate := migrated
-	duplicate.Id = 0
-	assert.Error(t, db.Create(&duplicate).Error)
-	_, err = AcceptOrganizationInvite(users[1].Id, legacy.Id)
-	assert.ErrorIs(t, err, ErrOrganizationInvite)
-	_, err = ResendOrganizationInvite(org.Id, users[0].Id, legacy.Id)
-	assert.ErrorIs(t, err, ErrOrganizationInviteLegacy)
-	require.NoError(t, RevokeOrganizationInvite(org.Id, users[0].Id, legacy.Id))
-	replacement, err := CreateOrganizationInvite(org.Id, users[0].Id, users[1].Username, OrgRoleMember)
-	require.NoError(t, err)
-	_, err = AcceptOrganizationInvite(users[1].Id, replacement.Id)
-	require.NoError(t, err)
 }
 
 func TestOrganizationInvitationInboxIsAccountScopedAndRequiresConsent(t *testing.T) {

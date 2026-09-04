@@ -122,11 +122,11 @@ Node 25 的实验性 Web Storage 与项目测试环境冲突，测试禁用该�
 
 右上角通知中心显示待处理邀请数量、组织、邀请人、角色与到期时间。登录时加载，前台每 30 秒刷新，重新聚焦窗口时刷新；离线用户下次登录仍可处理。通知按账号查询，不受当前组织选择影响。用户主动接受后才创建成员关系并切换组织；拒绝不切换组织。重复接受/拒绝幂等；过期、撤销和停用组织的邀请不能加入。默认有效期七天，管理员可撤销或重发；重发延长有效期，不需要复制链接。
 
-接口：`GET /api/organizations/invites` 仅列出当前账号的有效邀请；`POST /api/organizations/invites/:invite_id/accept` 和 `/decline` 仅允许该邀请的目标账号操作。创建与重发响应不再返回 token；旧 token 接受接口移除，旧链接页面提示使用通知中心。管理员列表支持 `declined` 状态，拒绝写入组织审计。
+接口：`GET /api/organizations/invites` 仅列出当前账号的有效邀请；`POST /api/organizations/invites/:invite_id/accept` 和 `/decline` 仅允许该邀请的目标账号操作。创建与重发仅返回站内邀请信息。管理员列表支持 `declined` 状态，拒绝写入组织审计。
 
-迁移新增可空的 `username`、`invitee_id` 列及接收人/状态/有效期复合索引，保留原 `email`、哈希、状态、有效期及索引。旧邮箱邀请不自动解释为用户名，也不会推送给同名账号；管理员应撤销后按用户名重新邀请。已接受记录保留。回滚应恢复升级前备份，避免旧版邮箱校验直接处理用户名邀请。
+邀请记录仅包含账号、组织、角色、状态、有效期与审计所需信息；接收人/状态/有效期使用复合索引。开发期间的邀请链接页面、令牌字段和生成代码、邮箱兼容分支及相关翻译均已清理，不作为发布功能保留。开发数据库在备份后一次性移除废弃字段及未绑定接收账号的无效记录，已有站内邀请保留。
 
-验证使用独立测试库：SQLite **3.50.4**、MySQL **5.7.44**、PostgreSQL **9.6.24**。覆盖无邮箱加入、账号隔离、错误/停用账号拒绝、精确用户名、改名后身份不转移、重复邀请、拒绝、撤销、过期、重发、组织停用及接受幂等。三种数据库均验证旧邀请表升级两次，旧数据、索引及令牌唯一约束保留；并验证新建及从实际发布版 **v1.0.0-rc.30 / 27ff6a87** 创建的代表性数据库升级、连续两次完整初始化，核对原余额、资源归属、日志及唯一性。本次邀请表不属于独立日志库。
+验证使用独立测试库：SQLite **3.50.4**、MySQL **5.7.44**、PostgreSQL **9.6.24**。覆盖无邮箱加入、账号隔离、错误/停用账号拒绝、精确用户名、改名后身份不转移、重复邀请、拒绝、撤销、过期、重发、组织停用及接受幂等。三种数据库验证一次性开发库清理后现有站内邀请和索引保留；并验证新建及从实际发布版 **v1.0.0-rc.30 / 27ff6a87** 创建的代表性数据库升级、连续两次完整初始化，核对原余额、资源归属、日志及唯一性。本次邀请表不属于独立日志库。
 
 验证命令（外部 DSN 必须指向可销毁的独立库）：
 
@@ -134,10 +134,10 @@ Node 25 的实验性 Web Storage 与项目测试环境冲突，测试禁用该�
 go test ./model -run TestOrganizationInvit -count=1
 TENANCY_TEST_MYSQL_DSN="$INVITE_MYSQL_DSN" go test ./model -run TestOrganizationInvit -count=1
 TENANCY_TEST_POSTGRES_DSN="$INVITE_POSTGRES_DSN" go test ./model -run TestOrganizationInvit -count=1
-go build -o /tmp/new-api-inapp-startup ./tools/multi-tenancy-verify
+go build -o /tmp/new-api-cleanup-startup ./tools/multi-tenancy-verify
 # 每种数据库分别设置 SQL_DSN 或 SQLITE_PATH。
 # fresh 直接运行；upgrade 先运行由发布版本构建的 released-fixture。
-TENANCY_VERIFY_STARTUP=1 /tmp/new-api-inapp-startup
+TENANCY_VERIFY_STARTUP=1 /tmp/new-api-cleanup-startup
 ```
 
 前端 19 项组织相关测试、类型检查、涉及文件 lint 和生产构建通过。本地独立 SQLite 应用完成真实 HTTP 联调：初始化管理员、注册无邮箱账号、按用户名邀请、通知列表账号隔离、错误账号拒绝、拒绝后重新邀请、接受并查询成员关系、重复接受幂等；创建响应不含 token 或链接。
@@ -167,3 +167,5 @@ bun run build
 ```
 
 真实 Redis 测试验证热缓存撤销；前端 51 项测试、类型检查、涉及文件 lint 和生产构建通过。本地独立应用的真实 HTTP 联调覆盖 Owner/Admin/Member 各自密钥列表、伪造成员筛选、详情/修改/删除/混合批量越权拒绝、平台密钥列表关闭、用量查询保留、停用后 relay 认证返回 401、恢复成员后需创建者显式启用。
+
+清理邀请链接的复验：三种数据库在独立库中建立清理前开发表，连续两次清理并初始化；现有站内邀请的 ID、有效期、组织/接收人索引保留，废弃字段消失，清理后创建、接受、拒绝均通过。一次性开发表夹具不进入发布代码。前端仍为 19 项组织测试通过，七种语言合计清除 12 个废弃文案键，生成路由中已无邀请链接页面。

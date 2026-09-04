@@ -27,7 +27,7 @@ func TestOrganizationScopeRejectsMissingOrganizationAcrossResourceTypes(t *testi
 				}
 				// Valid, deterministic unique identities let the same real query contract
 				// run against every persistence model on each supported SQL dialect.
-				for _, name := range []string{"Key", "RequestId", "TradeNo", "EventKey", "TokenHash"} {
+				for _, name := range []string{"Key", "RequestId", "TradeNo", "EventKey"} {
 					if f := fields.FieldByName(name); f.IsValid() && f.CanSet() && f.Kind() == reflect.String {
 						f.SetString(fmt.Sprintf("scope-%s-%d", fields.Type().Name(), orgID))
 					}
