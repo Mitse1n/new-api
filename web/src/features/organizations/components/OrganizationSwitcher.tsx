@@ -36,6 +36,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/auth-store'
 import { useOrganizationStore } from '@/stores/organization-store'
 
@@ -117,9 +118,12 @@ export function OrganizationSwitcher() {
         />
         {(['personal', 'team'] as const).map((kind) => (
           <div key={kind}>
-            <p className='mt-menu-label'>
-              {t(kind === 'personal' ? 'Personal' : 'Organization')}
-            </p>
+            {kind === 'team' && (
+              <>
+                <Separator className='mt-2' />
+                <p className='mt-menu-label'>{t('Organization')}</p>
+              </>
+            )}
             {organizations
               .filter(
                 (o) =>
