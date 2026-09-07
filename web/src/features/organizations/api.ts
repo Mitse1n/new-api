@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
+import { useOrganizationStore } from '@/stores/organization-store'
 
 import type {
   Organization,
@@ -77,10 +78,17 @@ export async function createOrganization(data: {
   if (!response.data.success) throw new Error(response.data.message)
   return response.data.data
 }
+async function accountContextQuery<T>(path: 'context' | 'summary'): Promise<T> {
+  const scope =
+    useOrganizationStore.getState().activeOrgID === null ? 'account' : 'org'
+  const response = await api.get<Response<T>>(`/api/${scope}/${path}`)
+  if (!response.data.success) throw new Error(response.data.message)
+  return response.data.data
+}
 export const getOrganizationContext = () =>
-  organizationQuery<OrganizationContext>('context')
+  accountContextQuery<OrganizationContext>('context')
 export const getOrganizationSummary = () =>
-  organizationQuery<OrganizationSummary>('summary')
+  accountContextQuery<OrganizationSummary>('summary')
 export const getOrganizationMembers = () =>
   organizationQuery<OrganizationMember[]>('members')
 export const getOrganizationInvites = () =>

@@ -37,6 +37,10 @@ func OrganizationContext() gin.HandlerFunc {
 			c.AbortWithStatusJSON(status, gin.H{"success": false, "code": "ORG_UNAVAILABLE", "message": "Organization unavailable."})
 			return
 		}
+		if c.GetHeader("X-Org-Id") != "" && org.Kind != model.OrganizationTeam {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "ORG_UNAVAILABLE", "message": "Organization unavailable."})
+			return
+		}
 		common.SetContextKey(c, constant.ContextKeyOrgId, org.Id)
 		common.SetContextKey(c, constant.ContextKeyOrgRole, member.Role)
 		common.SetContextKey(c, constant.ContextKeyOrganization, org)
@@ -59,6 +63,19 @@ func OrganizationContext() gin.HandlerFunc {
 		if c.Writer.Status() >= http.StatusBadRequest && c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
 			model.RecordOrganizationRequestFailure(org.Id, c.GetInt("id"), c.Writer.Status(), c.Request.Method+" "+c.FullPath())
 		}
+	}
+}
+
+// Explicit organization endpoints expose teams only. The implicit personal
+// scope remains available to account, wallet and API-key handlers internally.
+func RequireTeamOrganization() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		org, ok := c.MustGet("organization").(*model.Organization)
+		if !ok || org.Kind != model.OrganizationTeam {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "ORG_UNAVAILABLE", "message": "Organization unavailable."})
+			return
+		}
+		c.Next()
 	}
 }
 

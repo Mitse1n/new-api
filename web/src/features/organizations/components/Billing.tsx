@@ -40,14 +40,14 @@ export function Billing() {
   const { t } = useTranslation()
   const context = useOrganization()
   const summary = useQuery({
-    queryKey: ['organization-summary', context.organization.id],
+    queryKey: ['organization-summary', context.organization?.id],
     queryFn: getOrganizationSummary,
   })
   const data = summary.data
   if (!data) return <p role='status'>{t('Loading...')}</p>
   if (!context.capabilities.org['org.billing']?.read) {
     const own = data.usage.find(
-      (row) => row.user_id === context.membership.user_id
+      (row) => row.user_id === context.membership?.user_id
     )
     return (
       <div className='space-y-5'>

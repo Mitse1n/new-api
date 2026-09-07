@@ -336,7 +336,7 @@ export function SubscriptionPlansCard({
                     label: getBillingPreferenceLabel('wallet_only', t),
                   },
                 ]}
-                disabled={organization.organization.kind === 'team'}
+                disabled={organization.organization !== null}
                 value={billingPreference}
                 onValueChange={(v) => v !== null && handlePreferenceChange(v)}
               >

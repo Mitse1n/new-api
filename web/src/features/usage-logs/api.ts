@@ -44,7 +44,10 @@ function buildApiPath(
 ): string {
   const state = useOrganizationStore.getState()
   if (state.context && !platform) {
-    return endpoint === '/api/log' ? '/api/org/logs' : `${endpoint}/self`
+    if (endpoint === '/api/log') {
+      return state.context.organization ? '/api/org/logs' : '/api/account/logs'
+    }
+    return `${endpoint}/self`
   }
   return isAdmin ? endpoint : `${endpoint}/self`
 }

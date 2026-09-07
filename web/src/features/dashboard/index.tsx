@@ -229,7 +229,7 @@ export function Dashboard() {
 
   const meta = SECTION_META[activeSection] ?? SECTION_META.overview
   const isTeam = useOrganizationStore(
-    (state) => state.context?.organization.kind === 'team'
+    (state) => state.context?.organization != null
   )
   const platform = usePlatformView()
   const canReadOrganizationUsage = useOrganizationStore(

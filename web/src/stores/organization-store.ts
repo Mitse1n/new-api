@@ -67,7 +67,7 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
   setContext: (context, epoch) => {
     if (
       get().epoch !== epoch ||
-      context.organization.id !== get().activeOrgID
+      (context.organization?.id ?? null) !== get().activeOrgID
     ) {
       return
     }

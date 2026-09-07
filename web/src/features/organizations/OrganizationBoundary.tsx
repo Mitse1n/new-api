@@ -48,19 +48,21 @@ export function OrganizationBoundary(props: { children: ReactNode }) {
     const selected = organizations.data.find(
       (org) => org.id === activeOrgID && org.status === 1
     )
-    if (!selected) {
-      const personal = organizations.data.find(
-        (org) => org.kind === 'personal' && org.status === 1
-      )
-      if (personal && personal.id !== activeOrgID) {
-        useOrganizationStore.getState().select(personal.id)
-      }
+    if (activeOrgID !== null && !selected) {
+      useOrganizationStore.getState().select(null)
     }
   }, [organizations.data, activeOrgID])
   const selection = useQuery({
     queryKey: ['organization-context', userID, activeOrgID, epoch],
     queryFn: getOrganizationContext,
-    enabled: !!activeOrgID && boundUserID === userID,
+    enabled:
+      !!userID &&
+      boundUserID === userID &&
+      organizations.isSuccess &&
+      (activeOrgID === null ||
+        organizations.data.some(
+          (org) => org.id === activeOrgID && org.status === 1
+        )),
     staleTime: 0,
     retry: false,
   })
@@ -72,15 +74,9 @@ export function OrganizationBoundary(props: { children: ReactNode }) {
   if (
     userID !== boundUserID ||
     !context ||
-    context.organization.id !== activeOrgID
+    (context.organization?.id ?? null) !== activeOrgID
   ) {
-    const failed =
-      organizations.isError ||
-      selection.isError ||
-      (organizations.isSuccess &&
-        !organizations.data.some(
-          (org) => org.kind === 'personal' && org.status === 1
-        ))
+    const failed = organizations.isError || selection.isError
     return (
       <div
         className='flex min-h-svh flex-col items-center justify-center gap-4'
@@ -88,7 +84,7 @@ export function OrganizationBoundary(props: { children: ReactNode }) {
       >
         {failed ? (
           <>
-            <p>{t('Unable to load organization')}</p>
+            <p>{t('Request failed')}</p>
             <Button
               onClick={() => {
                 void organizations.refetch()
@@ -101,7 +97,7 @@ export function OrganizationBoundary(props: { children: ReactNode }) {
         ) : (
           <>
             <Spinner />
-            <p>{t('Loading organization')}</p>
+            <p>{t('Loading...')}</p>
           </>
         )}
       </div>

@@ -109,7 +109,7 @@ export function useLogsViewScope() {
   const { viewScope, setViewScope } = useUsageLogsContext()
   const orgManage = useOrganizationStore(
     (state) =>
-      state.context?.organization.kind === 'team' &&
+      state.context?.organization != null &&
       !!state.context.capabilities.org['org.usage']?.read_all
   )
   const canManageScope = platform ? role >= ROLE.ADMIN : orgManage

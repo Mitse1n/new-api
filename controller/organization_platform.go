@@ -14,7 +14,7 @@ import (
 // Platform authorization never turns org_id=0 into a wildcard in OrgScope.
 func PlatformListOrganizations(c *gin.Context) {
 	page := common.GetPageQuery(c)
-	query := model.DB.Model(&model.Organization{})
+	query := model.DB.Model(&model.Organization{}).Where("kind = ?", model.OrganizationTeam)
 	if keyword := strings.TrimSpace(c.Query("keyword")); keyword != "" {
 		query = query.Where("name LIKE ? OR slug LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
@@ -28,8 +28,33 @@ func PlatformListOrganizations(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	ownerIDs := make([]int, 0, len(organizations))
+	for _, org := range organizations {
+		ownerIDs = append(ownerIDs, org.OwnerId)
+	}
+	var owners []model.User
+	if len(ownerIDs) > 0 {
+		if err := model.DB.Unscoped().Select("id", "username", "display_name").Where("id IN ?", ownerIDs).Find(&owners).Error; err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
+	ownerByID := make(map[int]model.User, len(owners))
+	for _, owner := range owners {
+		ownerByID[owner.Id] = owner
+	}
+	type organizationResponse struct {
+		model.Organization
+		OwnerUsername    string `json:"owner_username"`
+		OwnerDisplayName string `json:"owner_display_name"`
+	}
+	items := make([]organizationResponse, 0, len(organizations))
+	for _, org := range organizations {
+		owner := ownerByID[org.OwnerId]
+		items = append(items, organizationResponse{org, owner.Username, owner.DisplayName})
+	}
 	page.SetTotal(int(total))
-	page.SetItems(organizations)
+	page.SetItems(items)
 	common.ApiSuccess(c, page)
 }
 
@@ -37,6 +62,11 @@ func PlatformOrganizationResources(c *gin.Context) {
 	orgID, err := strconv.Atoi(c.Param("org_id"))
 	if err != nil || orgID <= 0 {
 		organizationError(c, model.ErrOrganizationInput)
+		return
+	}
+	var org model.Organization
+	if err := model.DB.Select("id").Where("id = ? AND kind = ?", orgID, model.OrganizationTeam).First(&org).Error; err != nil {
+		organizationError(c, model.ErrOrganizationAccess)
 		return
 	}
 	page := common.GetPageQuery(c)

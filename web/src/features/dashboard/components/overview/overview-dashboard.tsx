@@ -474,7 +474,7 @@ export function OverviewDashboard() {
 
   const organization = useOrganization()
   const orgSummary = useQuery({
-    queryKey: ['organization-summary', organization.organization.id],
+    queryKey: ['organization-summary', organization.organization?.id],
     queryFn: getOrganizationSummary,
   })
   const requestCount = Number(orgSummary.data?.request_count ?? 0)

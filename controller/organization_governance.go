@@ -90,6 +90,14 @@ func GetOrganizationSummary(c *gin.Context) {
 		subscriptions = nil
 		memberCount = 1
 	}
+	if org.Kind == model.OrganizationPersonal {
+		publicSubscriptions := make([]subscriptionResponse, 0, len(subscriptions))
+		for i := range subscriptions {
+			publicSubscriptions = append(publicSubscriptions, subscriptionResponse{UserSubscription: &subscriptions[i]})
+		}
+		common.ApiSuccess(c, gin.H{"available_quota": available, "request_count": requestCount, "quota": org.Quota, "used_quota": org.UsedQuota, "group": org.Group, "subscriptions": publicSubscriptions, "key_count": keyCount})
+		return
+	}
 	common.ApiSuccess(c, gin.H{"available_quota": available, "request_count": requestCount, "quota": org.Quota, "used_quota": org.UsedQuota, "group": org.Group, "period_start": org.BudgetPeriodStart, "period_end": org.BudgetPeriodEnd, "usage": usage, "subscriptions": subscriptions, "member_count": memberCount, "key_count": keyCount, "spend_limit": member.SpendLimit, "budget_limit": settings.BudgetLimit, "alert_percent": settings.AlertPercent})
 }
 

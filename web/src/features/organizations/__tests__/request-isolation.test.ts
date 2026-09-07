@@ -104,3 +104,25 @@ test('signing in as another identity never restores the previous identity’s se
   expect(useOrganizationStore.getState().activeOrgID).toBe(10)
   expect(useOrganizationStore.getState().context).toBeNull()
 })
+
+test('switching from personal to a team discards in-flight account responses without exposing a personal ID', async () => {
+  useOrganizationStore.getState().select(null)
+  const oldRequest = api
+    .get('/api/account/summary')
+    .catch((error: unknown) => error)
+  useOrganizationStore.getState().select(20)
+  const currentRequest = api.get('/api/org/summary')
+  expect(responses[0].config.headers['X-Org-Id']).toBeUndefined()
+  expect(responses[1].config.headers['X-Org-Id']).toBe('20')
+  for (const response of responses) {
+    response.resolve({
+      config: response.config,
+      data: { success: true },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+    })
+  }
+  expect(axios.isCancel(await oldRequest)).toBe(true)
+  expect((await currentRequest).data.success).toBe(true)
+})

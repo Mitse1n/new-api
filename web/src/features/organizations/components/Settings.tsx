@@ -58,18 +58,18 @@ import {
   updateOrganizationSettings,
 } from '../api'
 import { useOrganization, useSwitchOrganization } from '../context'
-import type { OrganizationSettingsResponse } from '../types'
+import type { Organization, OrganizationSettingsResponse } from '../types'
 import { CreateOrganization } from './CreateOrganization'
 
 export function Settings() {
   const { t } = useTranslation()
   const context = useOrganization()
   const settings = useQuery({
-    queryKey: ['organization-settings', context.organization.id],
+    queryKey: ['organization-settings', context.organization?.id],
     queryFn: getOrganizationSettings,
-    enabled: context.organization.kind === 'team',
+    enabled: context.organization !== null,
   })
-  if (context.organization.kind === 'personal') {
+  if (context.organization === null) {
     return (
       <Card>
         <CardHeader>
@@ -93,10 +93,15 @@ export function Settings() {
       </p>
     )
   }
-  return <SettingsForm initial={settings.data} />
+  return (
+    <SettingsForm initial={settings.data} organization={context.organization} />
+  )
 }
 
-function SettingsForm(props: { initial: OrganizationSettingsResponse }) {
+function SettingsForm(props: {
+  initial: OrganizationSettingsResponse
+  organization: Organization
+}) {
   const { t } = useTranslation()
   const context = useOrganization()
   const client = useQueryClient()
@@ -152,13 +157,13 @@ function SettingsForm(props: { initial: OrganizationSettingsResponse }) {
     },
   })
   const members = useQuery({
-    queryKey: ['organization-members', context.organization.id],
+    queryKey: ['organization-members', props.organization.id],
     queryFn: getOrganizationMembers,
     enabled: action === 'transfer',
   })
   const impact = useQuery({
-    queryKey: ['organization-deletion-impact', context.organization.id],
-    queryFn: () => getDeletionImpact(context.organization.id),
+    queryKey: ['organization-deletion-impact', props.organization.id],
+    queryFn: () => getDeletionImpact(props.organization.id),
     enabled: action === 'delete',
     staleTime: 0,
   })
@@ -172,18 +177,18 @@ function SettingsForm(props: { initial: OrganizationSettingsResponse }) {
         return
       }
       await changeOrganizationStatus(
-        context.organization.id,
+        props.organization.id,
         action === 'delete' ? 3 : 2,
         confirmSlug
       )
-      switchOrg(context.organization.id)
+      switchOrg(props.organization.id)
     },
   })
   let actionTitle = t('Disable organization')
   if (action === 'delete') actionTitle = t('Delete organization')
   if (action === 'transfer') actionTitle = t('Transfer ownership')
   const owner =
-    context.membership.role === 'owner' && context.organization.kind === 'team'
+    context.membership?.role === 'owner' && context.organization !== null
   return (
     <div className='flex flex-col gap-5'>
       <div className='flex justify-end'>
@@ -340,7 +345,7 @@ function SettingsForm(props: { initial: OrganizationSettingsResponse }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{actionTitle}</DialogTitle>
-            <DialogDescription>{context.organization.name}</DialogDescription>
+            <DialogDescription>{props.organization.name}</DialogDescription>
           </DialogHeader>
           {action === 'transfer' && (
             <FieldGroup>
@@ -402,7 +407,7 @@ function SettingsForm(props: { initial: OrganizationSettingsResponse }) {
               <Field>
                 <FieldLabel htmlFor='confirm-slug'>
                   {t('Type {{slug}} to confirm deletion', {
-                    slug: context.organization.slug,
+                    slug: props.organization.slug,
                   })}
                 </FieldLabel>
                 <Input
@@ -429,7 +434,7 @@ function SettingsForm(props: { initial: OrganizationSettingsResponse }) {
                 (action === 'delete' &&
                   (!impact.data ||
                     impact.data.blocked ||
-                    confirmSlug !== context.organization.slug)) ||
+                    confirmSlug !== props.organization.slug)) ||
                 (action === 'transfer' && !target)
               }
               onClick={() => lifecycle.mutate()}

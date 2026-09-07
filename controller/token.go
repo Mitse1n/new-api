@@ -39,6 +39,7 @@ type tokenRequest struct {
 
 type tokenResponse struct {
 	*model.Token
+	OrgId       *int     `json:"org_id,omitempty"`
 	AutoGroups  []string `json:"auto_groups"`
 	CreatorName string   `json:"creator_name,omitempty"`
 }
@@ -344,7 +345,10 @@ func AddToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    &cleanToken,
+		"data": &struct {
+			*model.Token
+			OrgId *int `json:"org_id,omitempty"`
+		}{Token: &cleanToken},
 	})
 }
 

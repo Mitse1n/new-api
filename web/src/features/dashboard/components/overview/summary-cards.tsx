@@ -144,7 +144,7 @@ export function SummaryCards() {
   const summaryTimeRange = useMemo(() => computeTimeRange(1), [])
   const organization = useOrganization()
   const orgSummary = useQuery({
-    queryKey: ['organization-summary', organization.organization.id],
+    queryKey: ['organization-summary', organization.organization?.id],
     queryFn: getOrganizationSummary,
   })
   const remainQuota = Number(orgSummary.data?.available_quota ?? 0)

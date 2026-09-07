@@ -36,7 +36,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/lib/api'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 
-import type { Organization, Page } from './types'
+import type { PlatformOrganization, Page } from './types'
 
 const resourceColumns = {
   members: ['user_id', 'role', 'status', 'spend_limit'],
@@ -53,7 +53,7 @@ export function PlatformOrganizations() {
   const client = useQueryClient()
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
-  const [selected, setSelected] = useState<Organization | null>(null)
+  const [selected, setSelected] = useState<PlatformOrganization | null>(null)
   const [resource, setResource] = useState<Resource>('members')
   const [resourcePage, setResourcePage] = useState(1)
   const [confirm, setConfirm] = useState(false)
@@ -63,7 +63,7 @@ export function PlatformOrganizations() {
     queryFn: async () => {
       const response = await api.get<{
         success: boolean
-        data: Page<Organization>
+        data: Page<PlatformOrganization>
       }>('/api/platform/organizations', {
         params: { keyword, p: page, size: 20 },
       })
@@ -170,7 +170,6 @@ export function PlatformOrganizations() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('Organization')}</TableHead>
-                  <TableHead>{t('Type')}</TableHead>
                   <TableHead>{t('Owner')}</TableHead>
                   <TableHead>{t('Status')}</TableHead>
                   <TableHead>{t('Organization wallet')}</TableHead>
@@ -187,9 +186,13 @@ export function PlatformOrganizations() {
                       </p>
                     </TableCell>
                     <TableCell>
-                      {org.kind === 'personal' ? t('Personal') : t('Team')}
+                      <p>
+                        {org.owner_display_name || org.owner_username || '—'}
+                      </p>
+                      <p className='text-muted-foreground text-xs'>
+                        {org.owner_username} (#{org.owner_id})
+                      </p>
                     </TableCell>
-                    <TableCell>{org.owner_id}</TableCell>
                     <TableCell>
                       {org.status === 1 ? t('Active') : t('Inactive')}
                     </TableCell>

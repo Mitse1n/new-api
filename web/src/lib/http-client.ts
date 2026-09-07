@@ -120,7 +120,8 @@ api.interceptors.response.use(
     }
     if (
       error?.response?.status === 403 &&
-      error?.response?.data?.code === 'ORG_UNAVAILABLE'
+      error?.response?.data?.code === 'ORG_UNAVAILABLE' &&
+      useOrganizationStore.getState().activeOrgID !== null
     ) {
       useOrganizationStore.getState().select(null)
       toast.error(t('Organization unavailable. Returning to Personal.'))
@@ -179,7 +180,7 @@ api.interceptors.request.use(
   (config) => {
     const path = config.url ?? ''
     const scoped =
-      /^\/api\/(org\/|pricing$|token(?:\/|$)|user\/|subscription\/|log\/self|data\/(?:flow\/)?self|mj\/self|task\/)/.test(
+      /^\/api\/(org\/|account\/|pricing$|token(?:\/|$)|user\/|subscription\/|log\/self|data\/(?:flow\/)?self|mj\/self|task\/)/.test(
         path
       ) || path.startsWith('/pg/')
     if (scoped && !config.skipOrganizationContext) {

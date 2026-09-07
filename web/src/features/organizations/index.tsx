@@ -32,10 +32,7 @@ import { useOrganization } from './context'
 export function OrganizationPage(props: { section: string }) {
   const { t } = useTranslation()
   const context = useOrganization()
-  if (
-    context.organization.kind === 'personal' &&
-    props.section !== 'settings'
-  ) {
+  if (context.organization === null && props.section !== 'settings') {
     return (
       <Navigate to='/dashboard/$section' params={{ section: 'overview' }} />
     )
@@ -79,7 +76,7 @@ export function OrganizationPage(props: { section: string }) {
       <SectionPageLayout.Title>{title}</SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='flex flex-col gap-5 px-4 pb-6'>
-          {context.organization.kind === 'team' && <OrganizationSummary />}
+          {context.organization !== null && <OrganizationSummary />}
           {permitted ? (
             content
           ) : (

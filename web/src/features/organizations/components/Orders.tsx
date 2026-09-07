@@ -60,11 +60,11 @@ export function PlansAndOrders() {
   const context = useOrganization()
   const [page, setPage] = useState(1)
   const orders = useQuery({
-    queryKey: ['organization-orders', context.organization.id, page],
+    queryKey: ['organization-orders', context.organization?.id, page],
     queryFn: () => getOrganizationOrders(page),
   })
   const summary = useQuery({
-    queryKey: ['organization-summary', context.organization.id],
+    queryKey: ['organization-summary', context.organization?.id],
     queryFn: getOrganizationSummary,
   })
   const { topupInfo } = useTopupInfo()
@@ -73,7 +73,7 @@ export function PlansAndOrders() {
       <p className='text-muted-foreground text-sm'>
         {t(
           'Plans and prices are defined by the platform. Purchases belong to {{name}}.',
-          { name: context.organization.name }
+          { name: context.organization?.name }
         )}
       </p>
       <SubscriptionPlansCard
@@ -183,7 +183,7 @@ export function Audit() {
     'token.delete': t('Delete API key'),
   }
   const audit = useQuery({
-    queryKey: ['organization-audit', context.organization.id, page],
+    queryKey: ['organization-audit', context.organization?.id, page],
     queryFn: () => getOrganizationAudit(page),
   })
   return (

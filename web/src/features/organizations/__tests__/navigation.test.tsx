@@ -39,6 +39,7 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 
 import { useSidebarData } from '@/hooks/use-sidebar-data'
 import { useSidebarView } from '@/hooks/use-sidebar-view'
+import { api } from '@/lib/http-client'
 import { useAuthStore } from '@/stores/auth-store'
 import { useOrganizationStore } from '@/stores/organization-store'
 
@@ -46,17 +47,19 @@ import { OrganizationSummary } from '../components/OrganizationSummary'
 import { OrganizationSwitcher } from '../components/OrganizationSwitcher'
 import { useHasTeamOrganizations } from '../context'
 import { OrganizationPage } from '../index'
+import { OrganizationBoundary } from '../OrganizationBoundary'
+import { PlatformOrganizations } from '../PlatformOrganizations'
 import type { OrganizationMembership } from '../types'
 
 const i18n = createInstance()
 await i18n
   .use(initReactI18next)
   .init({ lng: 'en', resources: { en: { translation: {} } } })
-const personal: OrganizationMembership = {
-  id: 1,
-  name: 'Personal account',
-  slug: 'personal-1',
-  kind: 'personal',
+const team: OrganizationMembership = {
+  id: 2,
+  name: 'Design team',
+  slug: 'design',
+  kind: 'team',
   status: 1,
   owner_id: 1,
   group: 'default',
@@ -68,13 +71,7 @@ const personal: OrganizationMembership = {
   role: 'owner',
   spend_limit: 0,
 }
-const team: OrganizationMembership = {
-  ...personal,
-  id: 2,
-  name: 'Design team',
-  slug: 'design',
-  kind: 'team',
-}
+const originalAdapter = api.defaults.adapter
 let client: QueryClient
 let listKey: unknown[]
 
@@ -83,22 +80,12 @@ beforeEach(() => {
   useAuthStore.getState().auth.setUser({ id: 1, username: 'owner', role: 100 })
   useOrganizationStore.setState(useOrganizationStore.getInitialState(), true)
   useOrganizationStore.getState().bindUser(1)
-  useOrganizationStore.getState().select(1)
+  useOrganizationStore.getState().select(null)
   const epoch = useOrganizationStore.getState().epoch
   useOrganizationStore.getState().setContext(
     {
-      organization: personal,
-      membership: {
-        id: 1,
-        org_id: 1,
-        user_id: 1,
-        role: 'owner',
-        status: 1,
-        spend_limit: 0,
-        email: '',
-        username: 'owner',
-        display_name: 'Owner',
-      },
+      organization: null,
+      membership: null,
       capabilities: {
         org: { 'org.settings': { write: true } },
         platform: { users: { read: true } },
@@ -111,11 +98,12 @@ beforeEach(() => {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
   listKey = ['organizations', 1, epoch]
-  client.setQueryData(listKey, [personal])
+  client.setQueryData(listKey, [])
 })
 
 afterEach(() => {
   cleanup()
+  api.defaults.adapter = originalAdapter
   client.clear()
   useAuthStore.getState().auth.reset()
   useOrganizationStore.setState(useOrganizationStore.getInitialState(), true)
@@ -182,7 +170,7 @@ test('personal and team selection preserve admin navigation and show team tools 
     { wrapper: Wrapper }
   )
   await act(async () => {
-    client.setQueryData(listKey, [personal, team])
+    client.setQueryData(listKey, [team])
     const context = useOrganizationStore.getState().context
     if (!context) throw new Error('Missing test organization context')
     useOrganizationStore.setState({
@@ -198,12 +186,12 @@ test('personal and team selection preserve admin navigation and show team tools 
     'admin'
   )
   await act(async () => {
-    client.setQueryData(listKey, [personal])
+    client.setQueryData(listKey, [])
     const context = useOrganizationStore.getState().context
     if (!context) throw new Error('Missing test organization context')
     useOrganizationStore.setState({
-      activeOrgID: personal.id,
-      context: { ...context, organization: personal },
+      activeOrgID: null,
+      context: { ...context, organization: null },
     })
   })
   await waitFor(() => expect(result.current.hasTeam).toBe(false))
@@ -213,7 +201,7 @@ test('personal and team selection preserve admin navigation and show team tools 
 })
 
 test('the team switcher labels the personal section Personal and does not offer creation', async () => {
-  client.setQueryData(listKey, [personal, team])
+  client.setQueryData(listKey, [team])
   renderPage(OrganizationSwitcher)
   fireEvent.click(
     await screen.findByRole('button', { name: 'Switch organization' })
@@ -301,3 +289,64 @@ test('team ownership does not grant a regular user platform navigation', async (
     screen.queryByRole('link', { name: 'Organizations' })
   ).not.toBeInTheDocument()
 })
+
+test('platform organization owners show a readable name and user ID', async () => {
+  client.setQueryData(['platform-organizations', '', 1], {
+    items: [
+      { ...team, owner_username: 'root', owner_display_name: 'Root User' },
+    ],
+    total: 1,
+    page: 1,
+    page_size: 20,
+  })
+  renderPage(PlatformOrganizations)
+  expect(await screen.findByText('Root User')).toBeVisible()
+  expect(screen.getByText('root (#1)')).toBeVisible()
+  expect(
+    screen.queryByRole('columnheader', { name: 'Type' })
+  ).not.toBeInTheDocument()
+})
+
+test.each([null, 99])(
+  'account bootstrap works with team-only empty lists and saved selection %s',
+  async (savedSelection) => {
+    useOrganizationStore.getState().select(savedSelection)
+    client.clear()
+    const calls: string[] = []
+    api.defaults.adapter = async (config) => {
+      calls.push(config.url ?? '')
+      expect(config.headers['X-Org-Id']).toBeUndefined()
+      let data: unknown
+      if (config.url === '/api/organizations') {
+        data = []
+      } else if (config.url === '/api/account/context') {
+        data = {
+          organization: null,
+          membership: null,
+          pending_transfer: false,
+          capabilities: { platform: {}, org: {} },
+        }
+      } else {
+        throw new Error(`Unexpected request: ${config.url}`)
+      }
+      return {
+        config,
+        data: { success: true, data },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+      }
+    }
+    render(
+      <Wrapper>
+        <OrganizationBoundary>
+          <p>Account dashboard</p>
+        </OrganizationBoundary>
+      </Wrapper>
+    )
+    expect(await screen.findByText('Account dashboard')).toBeVisible()
+    expect(calls).toContain('/api/account/context')
+    expect(calls).not.toContain('/api/org/context')
+    expect(useOrganizationStore.getState().activeOrgID).toBeNull()
+  }
+)

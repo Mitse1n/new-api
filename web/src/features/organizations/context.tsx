@@ -31,8 +31,7 @@ export function useHasTeamOrganizations() {
     queryKey: ['organizations', userID, epoch],
     queryFn: listOrganizations,
     enabled: !!userID,
-    select: (items) =>
-      items.some((organization) => organization.kind === 'team'),
+    select: (items) => items.length > 0,
   })
   return organizations.data ?? false
 }
@@ -49,7 +48,7 @@ export function useSwitchOrganization() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
-  return (orgID: number) => {
+  return (orgID: number | null) => {
     void client.cancelQueries()
     client.removeQueries()
     useOrganizationStore.getState().select(orgID)

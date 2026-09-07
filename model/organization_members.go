@@ -26,6 +26,7 @@ func ListUserOrganizations(userID int) ([]OrganizationMembership, error) {
 	orgs := make([]OrganizationMembership, 0)
 	err := DB.Model(&Organization{}).Select("organizations.*, organization_members.role, organization_members.spend_limit").
 		Joins("JOIN organization_members ON organization_members.org_id = organizations.id").
+		Where("organizations.kind = ?", OrganizationTeam).
 		Where("organization_members.user_id = ? AND organization_members.status = ? AND (organizations.status = ? OR (organizations.status = ? AND organizations.owner_id = ?))", userID, OrganizationActive, OrganizationActive, OrganizationDisabled, userID).
 		Order("organizations.id").Scan(&orgs).Error
 	for i := range orgs {

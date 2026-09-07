@@ -21,7 +21,7 @@ export type Organization = {
   id: number
   name: string
   slug: string
-  kind: 'personal' | 'team'
+  kind: 'team'
   status: number
   owner_id: number
   group: string
@@ -49,8 +49,8 @@ export type OrganizationMember = {
 export type OrganizationContext = {
   logo?: string
   pending_transfer: boolean
-  organization: Organization
-  membership: OrganizationMember
+  organization: Organization | null
+  membership: OrganizationMember | null
   capabilities: {
     platform: Record<string, Record<string, boolean>>
     org: Record<string, Record<string, boolean>>
@@ -148,4 +148,9 @@ export type IncomingOrganizationInvite = {
   inviter_username: string
   role: 'admin' | 'member'
   expires_at: number
+}
+
+export type PlatformOrganization = Organization & {
+  owner_username: string
+  owner_display_name: string
 }

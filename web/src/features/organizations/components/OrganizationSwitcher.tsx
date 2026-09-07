@@ -81,7 +81,7 @@ export function OrganizationSwitcher() {
         }
       >
         <span className='mt-org-icon blue'>
-          {context.logo && context.organization.kind === 'team' ? (
+          {context.logo && context.organization !== null ? (
             <img
               src={context.logo}
               alt=''
@@ -89,21 +89,17 @@ export function OrganizationSwitcher() {
             />
           ) : (
             <HugeiconsIcon
-              icon={
-                context.organization.kind === 'personal'
-                  ? UserIcon
-                  : Building03Icon
-              }
+              icon={context.organization === null ? UserIcon : Building03Icon}
               size={18}
             />
           )}
         </span>
         <span className='mt-org-name'>
-          {context.organization.kind === 'personal'
+          {context.organization === null
             ? t('Personal')
             : context.organization.name}
         </span>
-        {context.organization.kind === 'team' && (
+        {context.organization !== null && context.membership && (
           <Badge variant='outline'>{roleLabels[context.membership.role]}</Badge>
         )}
         <HugeiconsIcon icon={ArrowDown01Icon} size={16} />
@@ -116,79 +112,72 @@ export function OrganizationSwitcher() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        {(['personal', 'team'] as const).map((kind) => (
-          <div key={kind}>
-            {kind === 'team' && (
-              <>
-                <Separator className='mt-2' />
-                <p className='mt-menu-label'>{t('Organization')}</p>
-              </>
+        {t('Personal').toLowerCase().includes(search.toLowerCase()) && (
+          <button
+            type='button'
+            className='mt-org-option'
+            aria-label={t('Personal')}
+            onClick={() => {
+              switchOrg(null)
+              setOpen(false)
+              setSearch('')
+              toast.success(t('Switched to {{name}}', { name: t('Personal') }))
+            }}
+          >
+            <span className='mt-org-icon blue'>
+              <HugeiconsIcon icon={UserIcon} size={18} />
+            </span>
+            <strong>{t('Personal')}</strong>
+            {context.organization === null && (
+              <HugeiconsIcon icon={Tick02Icon} size={16} />
             )}
-            {organizations
-              .filter(
-                (o) =>
-                  o.kind === kind &&
-                  (o.kind === 'personal' ? t('Personal') : o.name)
-                    .toLowerCase()
-                    .includes(search.toLowerCase())
-              )
-              .map((org) => {
-                const name = org.kind === 'personal' ? t('Personal') : org.name
-                return (
-                  <button
-                    type='button'
-                    className='mt-org-option'
-                    aria-label={
-                      org.status === 1
-                        ? name
-                        : t('Restore {{name}}', {
-                            name,
-                          })
-                    }
-                    disabled={restore.isPending}
-                    key={org.id}
-                    onClick={() => {
-                      if (org.status !== 1) {
-                        restore.mutate(org.id)
-                        return
-                      }
-                      switchOrg(org.id)
-                      setOpen(false)
-                      setSearch('')
-                      toast.success(
-                        t('Switched to {{name}}', {
-                          name,
-                        })
-                      )
-                    }}
-                  >
-                    <span className='mt-org-icon blue'>
-                      <HugeiconsIcon
-                        icon={
-                          org.kind === 'personal' ? UserIcon : Building03Icon
-                        }
-                        size={18}
-                      />
-                    </span>
-                    <span>
-                      <strong>{name}</strong>
-                      {org.kind === 'team' && (
-                        <small>
-                          {org.slug} ·{' '}
-                          {org.status === 1
-                            ? roleLabels[org.role]
-                            : t('Disabled — click to restore')}
-                        </small>
-                      )}
-                    </span>
-                    {org.id === context.organization.id && (
-                      <HugeiconsIcon icon={Tick02Icon} size={16} />
-                    )}
-                  </button>
-                )
-              })}
-          </div>
-        ))}
+          </button>
+        )}
+        <Separator className='mt-2' />
+        <p className='mt-menu-label'>{t('Organization')}</p>
+        {organizations
+          .filter((org) =>
+            org.name.toLowerCase().includes(search.toLowerCase())
+          )
+          .map((org) => (
+            <button
+              type='button'
+              className='mt-org-option'
+              key={org.id}
+              aria-label={
+                org.status === 1
+                  ? org.name
+                  : t('Restore {{name}}', { name: org.name })
+              }
+              disabled={restore.isPending}
+              onClick={() => {
+                if (org.status !== 1) {
+                  restore.mutate(org.id)
+                  return
+                }
+                switchOrg(org.id)
+                setOpen(false)
+                setSearch('')
+                toast.success(t('Switched to {{name}}', { name: org.name }))
+              }}
+            >
+              <span className='mt-org-icon blue'>
+                <HugeiconsIcon icon={Building03Icon} size={18} />
+              </span>
+              <span>
+                <strong>{org.name}</strong>
+                <small>
+                  {org.slug} ·{' '}
+                  {org.status === 1
+                    ? roleLabels[org.role]
+                    : t('Disabled — click to restore')}
+                </small>
+              </span>
+              {org.id === context.organization?.id && (
+                <HugeiconsIcon icon={Tick02Icon} size={16} />
+              )}
+            </button>
+          ))}
       </PopoverContent>
     </Popover>
   )

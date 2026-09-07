@@ -7,8 +7,8 @@ import (
 
 func PlatformChangeOrganizationStatusTx(tx *gorm.DB, orgID, actorID, status int, reason string) error {
 	var org Organization
-	if err := lockForUpdate(tx).Where("id = ?", orgID).First(&org).Error; err != nil {
-		return err
+	if err := lockForUpdate(tx).Where("id = ? AND kind = ?", orgID, OrganizationTeam).First(&org).Error; err != nil {
+		return ErrOrganizationAccess
 	}
 	if status != OrganizationActive && status != OrganizationDisabled {
 		return ErrOrganizationInput

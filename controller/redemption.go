@@ -23,7 +23,7 @@ func GetAllRedemptions(c *gin.Context) {
 		return
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(redemptions)
+	pageInfo.SetItems(redemptionResponses(redemptions))
 	common.ApiSuccess(c, pageInfo)
 	return
 }
@@ -38,7 +38,7 @@ func SearchRedemptions(c *gin.Context) {
 		return
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(redemptions)
+	pageInfo.SetItems(redemptionResponses(redemptions))
 	common.ApiSuccess(c, pageInfo)
 	return
 }
@@ -57,7 +57,7 @@ func GetRedemption(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    redemption,
+		"data":    redemptionResponse{Redemption: redemption},
 	})
 	return
 }

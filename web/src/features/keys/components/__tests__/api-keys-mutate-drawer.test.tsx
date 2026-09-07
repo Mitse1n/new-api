@@ -89,34 +89,11 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
 async function renderCreateDrawer(): Promise<void> {
   useOrganizationStore.setState({
     userID: 1,
-    activeOrgID: 1,
+    activeOrgID: null,
     context: {
       pending_transfer: false,
-      organization: {
-        id: 1,
-        name: 'Test organization',
-        slug: 'test',
-        kind: 'personal',
-        status: 1,
-        owner_id: 1,
-        group: 'default',
-        quota: 1000,
-        used_quota: 0,
-        version: 1,
-        budget_period_start: 0,
-        budget_period_end: 0,
-      },
-      membership: {
-        id: 1,
-        org_id: 1,
-        user_id: 1,
-        role: 'owner',
-        spend_limit: 0,
-        status: 1,
-        username: 'test',
-        display_name: 'Test',
-        email: '',
-      },
+      organization: null,
+      membership: null,
       capabilities: {
         platform: {},
         org: { 'org.token': { write: true, read: true } },

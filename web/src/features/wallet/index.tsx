@@ -365,7 +365,7 @@ function OrganizationWallet(props: WalletProps) {
               />
             </div>
 
-            {context.organization.kind === 'personal' && (
+            {context.organization === null && (
               <AffiliateRewardsCard
                 user={user}
                 affiliateLink={affiliateLink}

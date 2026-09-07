@@ -296,7 +296,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
         <Alert>
           <AlertDescription>
             {t('Purchasing for {{name}}', {
-              name: organization.organization.name,
+              name: organization.organization?.name ?? t('Personal'),
             })}
           </AlertDescription>
         </Alert>

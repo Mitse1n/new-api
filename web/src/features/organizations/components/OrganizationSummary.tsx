@@ -47,9 +47,9 @@ export function OrganizationSummary() {
   })
   const platform = usePlatformView()
   const summary = useQuery({
-    queryKey: ['organization-summary', context.organization.id],
+    queryKey: ['organization-summary', context.organization?.id],
     queryFn: getOrganizationSummary,
-    enabled: !platform && context.organization.kind === 'team',
+    enabled: !platform && context.organization !== null,
   })
   if (platform) {
     return (
@@ -59,7 +59,7 @@ export function OrganizationSummary() {
       </div>
     )
   }
-  if (context.organization.kind === 'personal') return null
+  if (context.organization === null) return null
   const data = summary.data
   const roleLabels = {
     owner: t('Owner'),
@@ -87,7 +87,7 @@ export function OrganizationSummary() {
           <div className='flex items-center gap-2'>
             <strong className='truncate'>{context.organization.name}</strong>
             <Badge variant='secondary'>
-              {roleLabels[context.membership.role]}
+              {context.membership ? roleLabels[context.membership.role] : ''}
             </Badge>
           </div>
           <span className='text-muted-foreground text-xs'>

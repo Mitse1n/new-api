@@ -62,7 +62,7 @@ export function Members(props: { budgets?: boolean }) {
   const context = useOrganization()
   const client = useQueryClient()
   const manage = context.capabilities.org['org.member']?.write === true
-  const team = context.organization.kind === 'team'
+  const team = context.organization !== null
   const resend = useMutation({
     mutationFn: (id: number) =>
       organizationMutation('post', `invites/${id}/resend`),
@@ -78,16 +78,16 @@ export function Members(props: { budgets?: boolean }) {
     null
   )
   const members = useQuery({
-    queryKey: ['organization-members', context.organization.id],
+    queryKey: ['organization-members', context.organization?.id],
     queryFn: getOrganizationMembers,
   })
   const summary = useQuery({
-    queryKey: ['organization-summary', context.organization.id],
+    queryKey: ['organization-summary', context.organization?.id],
     queryFn: getOrganizationSummary,
     enabled: !!props.budgets,
   })
   const invites = useQuery({
-    queryKey: ['organization-invites', context.organization.id],
+    queryKey: ['organization-invites', context.organization?.id],
     queryFn: getOrganizationInvites,
     enabled: manage && team && !props.budgets,
   })
