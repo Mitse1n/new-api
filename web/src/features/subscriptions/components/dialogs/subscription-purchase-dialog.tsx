@@ -34,7 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { useOrganization } from '@/features/organizations/context'
+import { useTeamContext } from '@/features/organizations/context'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { formatQuota } from '@/lib/format'
 import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
@@ -73,7 +73,7 @@ interface Props {
 
 export function SubscriptionPurchaseDialog(props: Props) {
   const { t } = useTranslation()
-  const organization = useOrganization()
+  const team = useTeamContext()
   const { currency } = useSystemConfig()
   const [paying, setPaying] = useState(false)
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('')
@@ -296,7 +296,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
         <Alert>
           <AlertDescription>
             {t('Purchasing for {{name}}', {
-              name: organization.organization?.name ?? t('Personal'),
+              name: team?.organization.name ?? t('Personal'),
             })}
           </AlertDescription>
         </Alert>

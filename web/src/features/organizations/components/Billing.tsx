@@ -40,7 +40,7 @@ export function Billing() {
   const { t } = useTranslation()
   const context = useOrganization()
   const summary = useQuery({
-    queryKey: ['organization-summary', context.organization?.id],
+    queryKey: ['organization-summary', context.organization.id],
     queryFn: getOrganizationSummary,
   })
   const data = summary.data

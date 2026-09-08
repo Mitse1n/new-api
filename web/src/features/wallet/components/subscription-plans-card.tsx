@@ -45,7 +45,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { useOrganization } from '@/features/organizations/context'
+import { useTeamContext } from '@/features/organizations/context'
 import {
   getPublicPlans,
   getSelfSubscriptionFull,
@@ -104,7 +104,7 @@ export function SubscriptionPlansCard({
   onPurchaseSuccess,
 }: SubscriptionPlansCardProps) {
   const { t } = useTranslation()
-  const organization = useOrganization()
+  const team = useTeamContext()
 
   const [plans, setPlans] = useState<PlanRecord[]>([])
   const [activeSubscriptions, setActiveSubscriptions] = useState<
@@ -336,7 +336,7 @@ export function SubscriptionPlansCard({
                     label: getBillingPreferenceLabel('wallet_only', t),
                   },
                 ]}
-                disabled={organization.organization !== null}
+                disabled={team !== null}
                 value={billingPreference}
                 onValueChange={(v) => v !== null && handlePreferenceChange(v)}
               >
@@ -539,12 +539,12 @@ export function SubscriptionPlansCard({
               const count = planPurchaseCountMap.get(plan.id) || 0
               const reached = limit > 0 && count >= limit
 
-              let audience = t('All organizations')
+              let audience = t('Everyone')
               if (plan.audience === 'org') {
                 audience = t('Team organizations')
               }
               if (plan.audience === 'personal') {
-                audience = t('Personal')
+                audience = t('Individual accounts')
               }
               const benefits = [
                 `${t('Validity Period')}: ${formatDuration(plan, t)}`,

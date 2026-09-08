@@ -44,10 +44,9 @@ export function useModelAnalytics(
   const epoch = useOrganizationStore((state) => state.epoch)
   const platform = usePlatformView()
   const isPlatformAdmin = platform && (user?.role ?? 0) >= ROLE.ADMIN
+  // Comparing members is a team feature; an account only ever sees itself.
   const canCompare =
-    !platform &&
-    context?.organization?.kind === 'team' &&
-    context.capabilities.org['org.usage']?.read_all === true
+    !platform && context?.capabilities.org['org.usage']?.read_all === true
   const timeRange = useMemo(
     () =>
       computeTimeRange(
@@ -73,7 +72,7 @@ export function useModelAnalytics(
       if (!response.success) throw new Error('Usage request failed')
       return response.data
     },
-    enabled: !!user?.id && (isPlatformAdmin || !!context),
+    enabled: !!user?.id,
   })
   let scope: UsageScope = selectedScope
   if (!canCompare) {

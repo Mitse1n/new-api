@@ -41,13 +41,13 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useOrganizationStore } from '@/stores/organization-store'
 
 import { listOrganizations, changeOrganizationStatus } from '../api'
-import { useOrganization, useSwitchOrganization } from '../context'
+import { useSwitchOrganization, useTeamContext } from '../context'
 
 import '@/styles/multi-tenancy.css'
 
 export function OrganizationSwitcher() {
   const { t } = useTranslation()
-  const context = useOrganization()
+  const team = useTeamContext()
   const switchOrg = useSwitchOrganization()
   const userID = useAuthStore((state) => state.auth.user?.id)
   const epoch = useOrganizationStore((state) => state.epoch)
@@ -81,26 +81,24 @@ export function OrganizationSwitcher() {
         }
       >
         <span className='mt-org-icon blue'>
-          {context.logo && context.organization !== null ? (
+          {team?.logo ? (
             <img
-              src={context.logo}
+              src={team.logo}
               alt=''
               className='size-5 rounded object-contain'
             />
           ) : (
             <HugeiconsIcon
-              icon={context.organization === null ? UserIcon : Building03Icon}
+              icon={team === null ? UserIcon : Building03Icon}
               size={18}
             />
           )}
         </span>
         <span className='mt-org-name'>
-          {context.organization === null
-            ? t('Personal')
-            : context.organization.name}
+          {team === null ? t('Personal') : team.organization.name}
         </span>
-        {context.organization !== null && context.membership && (
-          <Badge variant='outline'>{roleLabels[context.membership.role]}</Badge>
+        {team && (
+          <Badge variant='outline'>{roleLabels[team.membership.role]}</Badge>
         )}
         <HugeiconsIcon icon={ArrowDown01Icon} size={16} />
       </PopoverTrigger>
@@ -128,9 +126,7 @@ export function OrganizationSwitcher() {
               <HugeiconsIcon icon={UserIcon} size={18} />
             </span>
             <strong>{t('Personal')}</strong>
-            {context.organization === null && (
-              <HugeiconsIcon icon={Tick02Icon} size={16} />
-            )}
+            {team === null && <HugeiconsIcon icon={Tick02Icon} size={16} />}
           </button>
         )}
         <Separator className='mt-2' />
@@ -173,7 +169,7 @@ export function OrganizationSwitcher() {
                     : t('Disabled — click to restore')}
                 </small>
               </span>
-              {org.id === context.organization?.id && (
+              {org.id === team?.organization.id && (
                 <HugeiconsIcon icon={Tick02Icon} size={16} />
               )}
             </button>

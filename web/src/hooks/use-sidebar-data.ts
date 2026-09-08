@@ -49,9 +49,7 @@ import { useOrganizationStore } from '@/stores/organization-store'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
-  const isTeam = useOrganizationStore(
-    (state) => state.context?.organization != null
-  )
+  const isTeam = useOrganizationStore((state) => state.context != null)
   const capabilities = useOrganizationStore(
     (state) => state.context?.capabilities.org
   )

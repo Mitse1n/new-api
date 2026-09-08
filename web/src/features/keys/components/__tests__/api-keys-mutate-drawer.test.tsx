@@ -87,19 +87,8 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
 }
 
 async function renderCreateDrawer(): Promise<void> {
-  useOrganizationStore.setState({
-    userID: 1,
-    activeOrgID: null,
-    context: {
-      pending_transfer: false,
-      organization: null,
-      membership: null,
-      capabilities: {
-        platform: {},
-        org: { 'org.token': { write: true, read: true } },
-      },
-    },
-  })
+  // No team selected: the drawer creates a key for the account itself.
+  useOrganizationStore.setState({ userID: 1, activeOrgID: null, context: null })
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })

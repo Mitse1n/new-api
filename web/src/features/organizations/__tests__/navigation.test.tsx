@@ -82,18 +82,6 @@ beforeEach(() => {
   useOrganizationStore.getState().bindUser(1)
   useOrganizationStore.getState().select(null)
   const epoch = useOrganizationStore.getState().epoch
-  useOrganizationStore.getState().setContext(
-    {
-      organization: null,
-      membership: null,
-      capabilities: {
-        org: { 'org.settings': { write: true } },
-        platform: { users: { read: true } },
-      },
-      pending_transfer: false,
-    },
-    epoch
-  )
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
@@ -171,11 +159,27 @@ test('personal and team selection preserve admin navigation and show team tools 
   )
   await act(async () => {
     client.setQueryData(listKey, [team])
-    const context = useOrganizationStore.getState().context
-    if (!context) throw new Error('Missing test organization context')
     useOrganizationStore.setState({
       activeOrgID: team.id,
-      context: { ...context, organization: team },
+      context: {
+        organization: team,
+        membership: {
+          id: 1,
+          org_id: team.id,
+          user_id: 1,
+          role: 'owner',
+          spend_limit: 0,
+          status: 1,
+          username: 'owner',
+          display_name: 'Owner',
+          email: 'owner@example.test',
+        },
+        capabilities: {
+          org: { 'org.settings': { write: true } },
+          platform: { users: { read: true } },
+        },
+        pending_transfer: false,
+      },
     })
   })
   await waitFor(() => expect(result.current.hasTeam).toBe(true))
@@ -187,12 +191,7 @@ test('personal and team selection preserve admin navigation and show team tools 
   )
   await act(async () => {
     client.setQueryData(listKey, [])
-    const context = useOrganizationStore.getState().context
-    if (!context) throw new Error('Missing test organization context')
-    useOrganizationStore.setState({
-      activeOrgID: null,
-      context: { ...context, organization: null },
-    })
+    useOrganizationStore.setState({ activeOrgID: null, context: null })
   })
   await waitFor(() => expect(result.current.hasTeam).toBe(false))
   expect(
@@ -215,7 +214,6 @@ test('the team switcher labels the personal section Personal and does not offer 
   expect(
     screen.queryByRole('button', { name: 'Return to organization' })
   ).not.toBeInTheDocument()
-  expect(screen.queryByText('Personal organizations')).not.toBeInTheDocument()
   expect(
     screen.queryByRole('button', { name: 'Create organization' })
   ).not.toBeInTheDocument()
@@ -257,11 +255,28 @@ test.each([10, 100])(
   'platform role %s sees administrator entries while a team is selected',
   async (role) => {
     useAuthStore.getState().auth.setUser({ id: 1, username: 'admin', role })
-    const context = useOrganizationStore.getState().context
-    if (!context) throw new Error('Missing test organization context')
+    const teamContext = {
+      organization: team,
+      membership: {
+        id: 1,
+        org_id: team.id,
+        user_id: 1,
+        role: 'owner' as const,
+        spend_limit: 0,
+        status: 1,
+        username: 'owner',
+        display_name: 'Owner',
+        email: 'owner@example.test',
+      },
+      capabilities: {
+        org: { 'org.settings': { write: true } },
+        platform: { users: { read: true } },
+      },
+      pending_transfer: false,
+    }
     useOrganizationStore.setState({
       activeOrgID: team.id,
-      context: { ...context, organization: team },
+      context: teamContext,
     })
     client.setQueryData(['status'], {})
     renderPage(NavigationLinks)
@@ -273,11 +288,27 @@ test.each([10, 100])(
 
 test('team ownership does not grant a regular user platform navigation', async () => {
   useAuthStore.getState().auth.setUser({ id: 1, username: 'owner', role: 1 })
-  const context = useOrganizationStore.getState().context
-  if (!context) throw new Error('Missing test organization context')
   useOrganizationStore.setState({
     activeOrgID: team.id,
-    context: { ...context, organization: team },
+    context: {
+      organization: team,
+      membership: {
+        id: 1,
+        org_id: team.id,
+        user_id: 1,
+        role: 'owner',
+        spend_limit: 0,
+        status: 1,
+        username: 'owner',
+        display_name: 'Owner',
+        email: 'owner@example.test',
+      },
+      capabilities: {
+        org: { 'org.settings': { write: true } },
+        platform: {},
+      },
+      pending_transfer: false,
+    },
   })
   client.setQueryData(['status'], {})
   renderPage(NavigationLinks)
@@ -319,13 +350,6 @@ test.each([null, 99])(
       let data: unknown
       if (config.url === '/api/organizations') {
         data = []
-      } else if (config.url === '/api/account/context') {
-        data = {
-          organization: null,
-          membership: null,
-          pending_transfer: false,
-          capabilities: { platform: {}, org: {} },
-        }
       } else {
         throw new Error(`Unexpected request: ${config.url}`)
       }
@@ -345,7 +369,8 @@ test.each([null, 99])(
       </Wrapper>
     )
     expect(await screen.findByText('Account dashboard')).toBeVisible()
-    expect(calls).toContain('/api/account/context')
+    // Without a team there is no organization context to fetch, so the app
+    // must not block on one.
     expect(calls).not.toContain('/api/org/context')
     expect(useOrganizationStore.getState().activeOrgID).toBeNull()
   }

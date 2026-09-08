@@ -27,12 +27,14 @@ import { Members } from './components/Members'
 import { Audit, PlansAndOrders } from './components/Orders'
 import { OrganizationSummary } from './components/OrganizationSummary'
 import { Settings } from './components/Settings'
-import { useOrganization } from './context'
+import { useTeamContext } from './context'
 
 export function OrganizationPage(props: { section: string }) {
   const { t } = useTranslation()
-  const context = useOrganization()
-  if (context.organization === null && props.section !== 'settings') {
+  // Without a team only the settings section is reachable, where it offers the
+  // create-a-team form.
+  const team = useTeamContext()
+  if (team === null && props.section !== 'settings') {
     return (
       <Navigate to='/dashboard/$section' params={{ section: 'overview' }} />
     )
@@ -48,18 +50,17 @@ export function OrganizationPage(props: { section: string }) {
     case 'plans':
       title = t('Plans & orders')
       content = <PlansAndOrders />
-      permitted =
-        context.capabilities.org['org.subscription']?.purchase === true
+      permitted = team?.capabilities.org['org.subscription']?.purchase === true
       break
     case 'settings':
       title = t('Organization settings')
       content = <Settings />
-      permitted = context.capabilities.org['org.settings']?.write === true
+      permitted = team === null || team.capabilities.org['org.settings']?.write === true
       break
     case 'audit':
       title = t('Organization audit')
       content = <Audit />
-      permitted = context.capabilities.org['org.usage']?.read_all === true
+      permitted = team?.capabilities.org['org.usage']?.read_all === true
       break
     case 'members':
       break
@@ -76,7 +77,7 @@ export function OrganizationPage(props: { section: string }) {
       <SectionPageLayout.Title>{title}</SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='flex flex-col gap-5 px-4 pb-6'>
-          {context.organization !== null && <OrganizationSummary />}
+          {team !== null && <OrganizationSummary />}
           {permitted ? (
             content
           ) : (
