@@ -100,6 +100,13 @@ func ensureLogRequestId(log *Log) {
 }
 
 func createLog(log *Log) error {
+	if log.OrgId == 0 && log.UserId > 0 {
+		var user User
+		if err := DB.Unscoped().Select("personal_org_id").Where("id = ?", log.UserId).Limit(1).Find(&user).Error; err != nil {
+			return err
+		}
+		log.OrgId = user.PersonalOrgId
+	}
 	ensureLogRequestId(log)
 	return LOG_DB.Create(log).Error
 }

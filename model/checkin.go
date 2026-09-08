@@ -93,7 +93,11 @@ func userCheckinWithTransaction(checkin *Checkin, userId int, quotaAwarded int) 
 		}
 
 		// 步骤2: 在事务中增加用户额度
-		if err := creditTopUpQuota(tx, userId, quotaAwarded, nil); err != nil {
+		var user User
+		if err := tx.Select("id", "personal_org_id").Where("id = ?", userId).First(&user).Error; err != nil {
+			return err
+		}
+		if err := creditTopUpQuota(tx, userId, quotaAwarded, nil, user.PersonalOrgId); err != nil {
 			return errors.New("签到失败：更新额度出错")
 		}
 

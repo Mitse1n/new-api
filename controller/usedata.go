@@ -40,7 +40,7 @@ func GetAllQuotaDates(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    (dates),
+		"data":    quotaDataResponses(dates),
 	})
 	return
 }
@@ -56,7 +56,7 @@ func GetQuotaDatesByUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    (dates),
+		"data":    quotaDataResponses(dates),
 	})
 }
 
@@ -79,7 +79,7 @@ func GetUserQuotaDates(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    (dates),
+		"data":    quotaDataResponses(dates),
 	})
 	return
 }

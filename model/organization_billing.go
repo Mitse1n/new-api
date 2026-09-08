@@ -160,13 +160,26 @@ func reserveOrganizationCharge(orgID, userID, tokenID int, requestID string, amo
 				}
 			}
 			receipt.Quota = amount
-			return tx.Model(&receipt).Update("quota", amount).Error
+			if err := tx.Model(&receipt).Update("quota", amount).Error; err != nil {
+				return err
+			}
+			return syncPersonalOrganizationWalletTx(tx, orgID)
 		}
 		receipt = OrganizationCharge{RequestId: requestID, OrgId: orgID, UserId: userID, TokenId: tokenID, TokenQuotaManaged: manageToken, PeriodStart: period, Quota: amount, Status: "reserved"}
-		// Teams always spend their subscription allowance before the wallet; the
-		// per-account billing preference belongs to wallet-funded accounts only.
-		allowWallet := true
+		preference := "subscription_first"
+		if org.Kind == OrganizationPersonal && org.PersonalUserId != nil {
+			var owner User
+			if err := tx.Select("setting").Where("id = ?", *org.PersonalUserId).First(&owner).Error; err != nil {
+				return err
+			}
+			preference = common.NormalizeBillingPreference(owner.GetSetting().BillingPreference)
+		}
+		allowWallet := preference != "subscription_only"
+		walletPreferred := preference == "wallet_only" || preference == "wallet_first" && org.Quota >= amount
 		for _, sub := range subs {
+			if walletPreferred {
+				break
+			}
 			if !sub.AllowWalletOverflow {
 				allowWallet = false
 			}
@@ -191,7 +204,10 @@ func reserveOrganizationCharge(orgID, userID, tokenID int, requestID string, amo
 				return err
 			}
 		}
-		return tx.Create(&receipt).Error
+		if err := tx.Create(&receipt).Error; err != nil {
+			return err
+		}
+		return syncPersonalOrganizationWalletTx(tx, orgID)
 	})
 	return &receipt, err
 }
@@ -276,10 +292,12 @@ func finalizeOrganizationChargeTx(tx *gorm.DB, orgID int, requestID string, actu
 		return err
 	}
 	if !refund && usageDelta > 0 {
-		return queueOrganizationBudgetNotificationsTx(tx, &org)
+		if err := queueOrganizationBudgetNotificationsTx(tx, &org); err != nil {
+			return err
+		}
 	}
 
-	return nil
+	return syncPersonalOrganizationWalletTx(tx, orgID)
 }
 
 // adjustOrganizationTokenQuotaTx serializes a Key's hard limit with its wallet.

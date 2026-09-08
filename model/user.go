@@ -77,6 +77,7 @@ func resolveUserSortOptions(sortOptions []UserSortOptions) UserSortOptions {
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
 type User struct {
+	PersonalOrgId    int                        `json:"-" gorm:"index"`
 	Id               int                        `json:"id"`
 	Username         string                     `json:"username" gorm:"unique;index" validate:"max=20"`
 	Password         string                     `json:"password" gorm:"not null;" validate:"min=8,max=20"`
@@ -114,16 +115,17 @@ type User struct {
 
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
-		Id:          user.Id,
-		Group:       user.Group,
-		Quota:       user.Quota,
-		Status:      user.Status,
-		Role:        user.Role,
-		Username:    user.Username,
-		Setting:     user.Setting,
-		Email:       user.Email,
-		AuthVersion: user.AuthVersion,
-		CacheSchema: userCacheSchemaVersion,
+		PersonalOrgId: user.PersonalOrgId,
+		Id:            user.Id,
+		Group:         user.Group,
+		Quota:         user.Quota,
+		Status:        user.Status,
+		Role:          user.Role,
+		Username:      user.Username,
+		Setting:       user.Setting,
+		Email:         user.Email,
+		AuthVersion:   user.AuthVersion,
+		CacheSchema:   userCacheSchemaVersion,
 	}
 	return cache
 }
@@ -555,13 +557,22 @@ func (user *User) TransferAffQuotaToQuota(quota int) error {
 	}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var current User
+		if err := tx.Where("id = ?", user.Id).First(&current).Error; err != nil {
+			return err
+		}
+		if current.PersonalOrgId > 0 {
+			var org Organization
+			if err := lockForUpdate(tx).Where("id = ?", current.PersonalOrgId).First(&org).Error; err != nil {
+				return err
+			}
+		}
 		if err := lockForUpdate(tx).Where("id = ?", user.Id).First(&current).Error; err != nil {
 			return err
 		}
 		if current.AffQuota < quota {
 			return errors.New("邀请额度不足！")
 		}
-		if err := creditTopUpQuota(tx, user.Id, quota, nil); err != nil {
+		if err := creditTopUpQuota(tx, user.Id, quota, nil, current.PersonalOrgId); err != nil {
 			return err
 		}
 		return tx.Model(&current).Update("aff_quota", gorm.Expr("aff_quota - ?", quota)).Error
@@ -642,7 +653,11 @@ func (user *User) Insert(inviterId int) error {
 				user.SetSetting(defaultSetting)
 			}
 
-			return tx.Create(user).Error
+			if err := tx.Create(user).Error; err != nil {
+				return err
+			}
+			_, err := EnsurePersonalOrganization(tx, user)
+			return err
 		})
 	}); err != nil {
 		return err
@@ -705,7 +720,11 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 			user.SetSetting(defaultSetting)
 		}
 
-		return tx.Create(user).Error
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		_, err := EnsurePersonalOrganization(tx, user)
+		return err
 	})
 }
 
@@ -772,6 +791,11 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
+	}
+	if current.PersonalOrgId > 0 && newUser.Group != "" && current.Group != newUser.Group {
+		if err := UpdatePersonalOrganizationGroupTx(tx, current.PersonalOrgId, newUser.Group); err != nil {
+			return err
+		}
 	}
 	// Updates(struct) ignores zero values. Match that behavior when deciding
 	// whether this request actually changes authentication-sensitive state;
@@ -844,6 +868,11 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
+	}
+	if current.PersonalOrgId > 0 && current.Group != newUser.Group {
+		if err := UpdatePersonalOrganizationGroupTx(tx, current.PersonalOrgId, newUser.Group); err != nil {
+			return err
+		}
 	}
 	authChanged := (updatePassword && current.Password != newUser.Password) || current.Group != newUser.Group
 	if authChanged {
@@ -1268,6 +1297,13 @@ func IncreaseUserQuota(id int, quota int, db bool) (err error) {
 	if err := common.ValidateWalletQuota(quota); err != nil {
 		return err
 	}
+	user, lookupErr := GetUserCache(id)
+	if lookupErr != nil {
+		return lookupErr
+	}
+	if user.PersonalOrgId > 0 {
+		return AdjustPersonalOrganizationQuota(user.PersonalOrgId, id, int64(quota))
+	}
 	if !db && common.BatchUpdateEnabled {
 		addNewRecord(BatchUpdateTypeUserQuota, id, quota)
 		gopool.Go(func() {
@@ -1311,6 +1347,13 @@ func increaseUserQuota(id int, quota int) (err error) {
 func DecreaseUserQuota(id int, quota int, db bool) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
+	}
+	user, lookupErr := GetUserCache(id)
+	if lookupErr != nil {
+		return lookupErr
+	}
+	if user.PersonalOrgId > 0 {
+		return AdjustPersonalOrganizationQuota(user.PersonalOrgId, id, int64(-quota))
 	}
 	gopool.Go(func() {
 		err := cacheDecrUserQuota(id, int64(quota))

@@ -25,7 +25,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/setup", anonymousRequestBodyLimit, controller.PostSetup)
 		apiRouter.GET("/status", controller.GetStatus)
 		apiRouter.GET("/uptime/status", controller.GetUptimeKumaStatus)
-		apiRouter.GET("/models", middleware.UserAuth(), middleware.TeamOrganizationContext(), controller.DashboardListModels)
+		apiRouter.GET("/models", middleware.UserAuth(), middleware.OrganizationContext(), controller.DashboardListModels)
 		apiRouter.GET("/status/test", middleware.AdminAuth(), controller.TestStatus)
 		apiRouter.GET("/notice", controller.GetNotice)
 		apiRouter.GET("/user-agreement", controller.GetUserAgreement)
@@ -33,7 +33,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/about", controller.GetAbout)
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
-		apiRouter.GET("/pricing", middleware.HeaderNavModuleAuth("pricing"), middleware.TeamOrganizationContext(), controller.GetPricing)
+		apiRouter.GET("/pricing", middleware.HeaderNavModuleAuth("pricing"), middleware.OptionalOrganizationContext(), controller.GetPricing)
 		perfMetricsRoute := apiRouter.Group("/perf-metrics")
 		perfMetricsRoute.Use(middleware.HeaderNavModulePublicOrUserAuth("pricing"))
 		{
@@ -83,7 +83,7 @@ func SetApiRouter(router *gin.Engine) {
 			userRoute.GET("/groups", controller.GetUserGroups)
 
 			selfRoute := userRoute.Group("/")
-			selfRoute.Use(middleware.UserAuth(), middleware.TeamOrganizationContext())
+			selfRoute.Use(middleware.UserAuth(), middleware.OrganizationContext())
 			{
 				selfRoute.GET("/sessions", middleware.DisableCache(), controller.GetLoginSessions)
 				selfRoute.DELETE("/sessions/:sid", middleware.DisableCache(), controller.DeleteLoginSession)
@@ -157,7 +157,7 @@ func SetApiRouter(router *gin.Engine) {
 
 		// Subscription billing (plans, purchase, admin management)
 		subscriptionRoute := apiRouter.Group("/subscription")
-		subscriptionRoute.Use(middleware.UserAuth(), middleware.TeamOrganizationContext())
+		subscriptionRoute.Use(middleware.UserAuth(), middleware.OrganizationContext())
 		{
 			subscriptionRoute.GET("/plans", controller.GetSubscriptionPlans)
 			subscriptionRoute.GET("/self", middleware.RequireOrgPermission("org.billing", "read"), controller.GetSubscriptionSelf)
@@ -255,7 +255,7 @@ func SetApiRouter(router *gin.Engine) {
 		registerChannelRoutes(apiRouter)
 		registerAuthzRoutes(apiRouter)
 		tokenRoute := apiRouter.Group("/token")
-		tokenRoute.Use(middleware.UserAuth(), middleware.TeamOrganizationContext(), middleware.RequireOrgPermission("org.token", "write"))
+		tokenRoute.Use(middleware.UserAuth(), middleware.OrganizationContext(), middleware.RequireOrgPermission("org.token", "write"))
 		{
 			tokenRoute.GET("/", controller.GetAllTokens)
 			tokenRoute.GET("/search", middleware.SearchRateLimit(), controller.SearchTokens)
@@ -293,11 +293,11 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute := apiRouter.Group("/log")
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
 		logRoute.GET("/stat", middleware.AdminAuth(), controller.GetLogsStat)
-		logRoute.GET("/self/stat", middleware.UserAuth(), middleware.TeamOrganizationContext(), middleware.RequireOrgPermission("org.usage", "read"), controller.GetOrganizationLogStats)
+		logRoute.GET("/self/stat", middleware.UserAuth(), middleware.OrganizationContext(), middleware.RequireOrgPermission("org.usage", "read"), controller.GetOrganizationLogStats)
 		logRoute.GET("/channel_affinity_usage_cache", middleware.AdminAuth(), controller.GetChannelAffinityUsageCacheStats)
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
-		logRoute.GET("/self", middleware.UserAuth(), middleware.TeamOrganizationContext(), middleware.RequireOrgPermission("org.usage", "read"), controller.GetOrganizationLogs)
-		logRoute.GET("/self/search", middleware.UserAuth(), middleware.TeamOrganizationContext(), middleware.RequireOrgPermission("org.usage", "read"), middleware.SearchRateLimit(), controller.GetOrganizationLogs)
+		logRoute.GET("/self", middleware.UserAuth(), middleware.OrganizationContext(), middleware.RequireOrgPermission("org.usage", "read"), controller.GetOrganizationLogs)
+		logRoute.GET("/self/search", middleware.UserAuth(), middleware.OrganizationContext(), middleware.RequireOrgPermission("org.usage", "read"), middleware.SearchRateLimit(), controller.GetOrganizationLogs)
 
 		systemTaskRoute := apiRouter.Group("/system-task")
 		systemTaskRoute.Use(middleware.RootAuth())
@@ -318,9 +318,9 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute := apiRouter.Group("/data")
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
 		dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)
-		dataRoute.GET("/self", middleware.UserAuth(), middleware.TeamOrganizationContext(), controller.GetUserQuotaDates)
+		dataRoute.GET("/self", middleware.UserAuth(), middleware.OrganizationContext(), controller.GetUserQuotaDates)
 		dataRoute.GET("/flow", middleware.AdminAuth(), controller.GetAllFlowQuotaDates)
-		dataRoute.GET("/flow/self", middleware.UserAuth(), middleware.TeamOrganizationContext(), controller.GetUserFlowQuotaDates)
+		dataRoute.GET("/flow/self", middleware.UserAuth(), middleware.OrganizationContext(), controller.GetUserFlowQuotaDates)
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{
@@ -342,14 +342,14 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		mjRoute := apiRouter.Group("/mj")
-		mjRoute.GET("/self", middleware.UserAuth(), middleware.TeamOrganizationContext(), controller.GetUserMidjourney)
+		mjRoute.GET("/self", middleware.UserAuth(), middleware.OrganizationContext(), controller.GetUserMidjourney)
 		mjRoute.GET("/", middleware.AdminAuth(), controller.GetAllMidjourney)
 
 		taskRoute := apiRouter.Group("/task")
 		{
-			taskRoute.GET("/self", middleware.UserAuth(), middleware.TeamOrganizationContext(), controller.GetUserTask)
+			taskRoute.GET("/self", middleware.UserAuth(), middleware.OrganizationContext(), controller.GetUserTask)
 			taskRoute.GET("", middleware.AdminAuth(), controller.GetAllTask)
-			taskRoute.GET("/:task_id/artifacts", middleware.UserAuth(), middleware.TeamOrganizationContext(), controller.GetDashboardTaskArtifacts)
+			taskRoute.GET("/:task_id/artifacts", middleware.UserAuth(), middleware.OrganizationContext(), controller.GetDashboardTaskArtifacts)
 		}
 
 		vendorRoute := apiRouter.Group("/vendors")

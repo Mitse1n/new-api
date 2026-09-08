@@ -303,7 +303,7 @@ func GetAllMidjourney(c *gin.Context) {
 		}
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(items)
+	pageInfo.SetItems(midjourneyResponses(items))
 	common.ApiSuccess(c, pageInfo)
 }
 
@@ -333,6 +333,6 @@ func GetUserMidjourney(c *gin.Context) {
 		}
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(items)
+	pageInfo.SetItems(midjourneyResponses(items))
 	common.ApiSuccess(c, pageInfo)
 }

@@ -58,11 +58,14 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 	}
 	require.NoError(t, db.Raw(versionQuery).Scan(&version).Error)
 	t.Logf("database: %s", version)
-	owner := model.User{Username: "owner", DisplayName: "Owner Name", Password: "private-password", Email: "private@example.test", AffCode: "owner", Status: 1, Quota: 12345}
-	require.NoError(t, db.Create(&owner).Error)
+	owner := model.User{Username: "owner", DisplayName: "Owner Name", Password: "private-password", Email: "private@example.test", AffCode: "owner", Status: 1}
+	require.NoError(t, model.CreateUserWithPersonalOrganization(&owner))
+	personal, err := model.GetPersonalOrganization(owner.Id)
+	require.NoError(t, err)
+	require.NoError(t, db.Model(personal).Update("quota", 12345).Error)
 	team, err := model.CreateTeamOrganization(owner.Id, "Design team", "design")
 	require.NoError(t, err)
-	key := model.Token{UserId: owner.Id, Name: "own-account-key", Key: "private-token-key"}
+	key := model.Token{OrgId: personal.Id, UserId: owner.Id, Name: "personal-key", Key: "private-token-key"}
 	require.NoError(t, db.Create(&key).Error)
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set("id", owner.Id); c.Set("role", common.RoleRootUser); c.Next() })
@@ -72,9 +75,11 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 	r.PUT("/platform/organizations/:org_id/status", PlatformChangeOrganizationStatus)
 	r.GET("/organizations/:org_id/deletion-impact", GetOrganizationDeletionImpact)
 	r.PUT("/organizations/:org_id/status", ChangeOrganizationStatus)
-	shared := r.Group("/shared", middleware.TeamOrganizationContext())
-	shared.GET("/tokens", GetAllTokens)
-	org := r.Group("/org", middleware.TeamOrganizationContext(), middleware.RequireTeamOrganization())
+	account := r.Group("/account", middleware.OrganizationContext())
+	account.GET("/context", GetOrganizationContext)
+	account.GET("/summary", GetOrganizationSummary)
+	account.GET("/tokens", GetAllTokens)
+	org := r.Group("/org", middleware.OrganizationContext(), middleware.RequireTeamOrganization())
 	org.GET("/context", GetOrganizationContext)
 	org.GET("/members", GetOrganizationMembers)
 
@@ -111,27 +116,51 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 			assert.NotContains(t, result.Body.String(), "private-password")
 			assert.NotContains(t, result.Body.String(), "private@example.test")
 		}
-		result := request("GET", "/organizations", "", "")
+		result := request("GET", "/platform/organizations?keyword=personal-", "", "")
+		assert.Contains(t, result.Body.String(), `"total":0`)
+		assert.Contains(t, result.Body.String(), `"items":[]`)
+		result = request("GET", "/organizations", "", "")
 		assert.Contains(t, result.Body.String(), "Design team")
+		assert.NotContains(t, result.Body.String(), "personal-")
+		assert.NotContains(t, result.Body.String(), `"kind":"personal"`)
 	})
-	t.Run("an account without a team keeps its own keys and never leaks the secret", func(t *testing.T) {
-		result := request("GET", "/shared/tokens", "", "")
+	t.Run("personal account has no organization identity but retains wallet and keys", func(t *testing.T) {
+		result := request("GET", "/account/context", "", "")
 		require.Equal(t, 200, result.Code)
-		assert.Contains(t, result.Body.String(), "own-account-key")
+		assert.Contains(t, result.Body.String(), `"organization":null`)
+		assert.Contains(t, result.Body.String(), `"membership":null`)
+		assert.NotContains(t, result.Body.String(), "org_id")
+		result = request("GET", "/account/summary", "", "")
+		require.Equal(t, 200, result.Code)
+		assert.Contains(t, result.Body.String(), `"quota":12345`)
+		assert.NotContains(t, result.Body.String(), "org_id")
+		assert.NotContains(t, result.Body.String(), "member_count")
+		result = request("GET", "/account/tokens", "", "")
+		require.Equal(t, 200, result.Code)
+		assert.Contains(t, result.Body.String(), "personal-key")
+		assert.NotContains(t, result.Body.String(), "org_id")
 		assert.NotContains(t, result.Body.String(), key.Key)
 		var stored model.Token
 		require.NoError(t, db.First(&stored, key.Id).Error)
-		assert.Equal(t, 0, stored.OrgId, "a key created outside a team carries no organization")
+		assert.Equal(t, personal.Id, stored.OrgId)
 	})
-	t.Run("organization endpoints reject a request that names no team", func(t *testing.T) {
+	t.Run("explicit personal organization access is rejected", func(t *testing.T) {
+		id := strconv.Itoa(personal.Id)
 		for _, test := range []struct{ method, path, header, body string }{
 			{"GET", "/org/context", "", ""}, {"GET", "/org/members", "", ""},
-			{"GET", "/org/context", "0", ""}, {"GET", "/org/context", "-1", ""},
-			{"GET", "/org/context", strconv.Itoa(team.Id + 500), ""},
+			{"GET", "/org/context", id, ""}, {"GET", "/account/tokens", id, ""},
+			{"GET", "/platform/organizations/" + id + "/resources/members", "", ""},
+			{"PUT", "/platform/organizations/" + id + "/status", "", `{"status":2,"reason":"test"}`},
+			{"GET", "/organizations/" + id + "/deletion-impact", "", ""},
+			{"PUT", "/organizations/" + id + "/status", "", `{"status":2}`},
 		} {
 			result := request(test.method, test.path, test.header, test.body)
-			assert.Equal(t, 403, result.Code, test.method+test.path+" "+test.header)
+			assert.Equal(t, 403, result.Code, test.method+test.path)
+			assert.NotContains(t, result.Body.String(), "personal-")
 		}
+		var stored model.Organization
+		require.NoError(t, db.First(&stored, personal.Id).Error)
+		assert.Equal(t, model.OrganizationActive, stored.Status)
 	})
 	t.Run("teams still resolve and platform can disable and restore them", func(t *testing.T) {
 		id := strconv.Itoa(team.Id)
@@ -144,4 +173,26 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 			assert.Contains(t, result.Body.String(), `"success":true`)
 		}
 	})
+}
+
+func TestResourceResponsesKeepStorageScopePrivate(t *testing.T) {
+	token := &model.Token{OrgId: 71, Key: "private", Name: "test"}
+	for _, response := range []any{
+		buildMaskedTokenResponse(token),
+		logResponses([]*model.Log{{OrgId: 71, Quota: 12}}),
+		topUpResponses([]*model.TopUp{{OrgId: 71, Money: 2}}),
+		midjourneyResponses([]*model.Midjourney{{OrgId: 71}}),
+		quotaDataResponses([]*model.QuotaData{{OrgId: 71}}),
+		subscriptionSummaryResponses([]model.SubscriptionSummary{{Subscription: &model.UserSubscription{OrgId: 71}}}),
+	} {
+		data, err := common.Marshal(response)
+		require.NoError(t, err)
+		assert.NotContains(t, string(data), "org_id")
+	}
+	data, err := common.Marshal(token)
+	require.NoError(t, err)
+	var cached model.Token
+	require.NoError(t, common.Unmarshal(data, &cached))
+	assert.Equal(t, 71, cached.OrgId, "cache serialization must retain the billing scope")
+	assert.Equal(t, "private", cached.Key)
 }

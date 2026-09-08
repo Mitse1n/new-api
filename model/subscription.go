@@ -531,6 +531,22 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	if userId <= 0 {
 		return nil, errors.New("invalid user id")
 	}
+	var owner User
+	if err := tx.Select("id", "personal_org_id").Where("id = ?", userId).First(&owner).Error; err != nil {
+		return nil, err
+	}
+	if owner.PersonalOrgId > 0 {
+		var org Organization
+		if err := lockForUpdate(tx).Where("id = ?", owner.PersonalOrgId).First(&org).Error; err != nil {
+			return nil, err
+		}
+		if source != "order" {
+			if err := ValidateOrganizationPlan(tx, &org, plan); err != nil {
+				return nil, err
+			}
+		}
+		return CreateOrganizationSubscriptionFromPlanTx(tx, owner.PersonalOrgId, userId, plan, source)
+	}
 	if plan.MaxPurchasePerUser > 0 {
 		var count int64
 		if err := tx.Model(&UserSubscription{}).
@@ -773,9 +789,15 @@ func AdminBindSubscription(userId int, planId int, sourceNote string) (string, e
 	}
 	groupChanged := false
 	err = DB.Transaction(func(tx *gorm.DB) error {
+		// Personal organizations lock their wallet before the compatibility user row.
 		var userRow User
-		if err := lockForUpdate(tx).Select("id").Where("id = ?", userId).First(&userRow).Error; err != nil {
+		if err := tx.Select("id", "personal_org_id").Where("id = ?", userId).First(&userRow).Error; err != nil {
 			return err
+		}
+		if userRow.PersonalOrgId == 0 {
+			if err := lockForUpdate(tx).Select("id").Where("id = ?", userId).First(&userRow).Error; err != nil {
+				return err
+			}
 		}
 		subscription, err := CreateUserSubscriptionFromPlanTx(tx, userId, plan, "admin")
 		if err == nil {

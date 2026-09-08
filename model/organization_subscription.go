@@ -14,7 +14,11 @@ func ValidateOrganizationPlan(tx *gorm.DB, org *Organization, plan *Subscription
 	if org == nil || plan == nil || !plan.Enabled || plan.MaxMembers < 0 {
 		return ErrOrganizationInput
 	}
-	if audience := plan.Audience; audience != "" && audience != "both" && audience != "org" {
+	audience := plan.Audience
+	if audience == "" {
+		audience = "both"
+	}
+	if audience != "both" && (org.Kind == OrganizationPersonal && audience != "personal" || org.Kind == OrganizationTeam && audience != "org") {
 		return errors.New("plan is not available for this organization")
 	}
 	if plan.MaxMembers > 0 {
@@ -75,6 +79,11 @@ func CreateOrganizationSubscriptionFromPlanTx(tx *gorm.DB, orgID, actorID int, p
 		if err := tx.Model(&org).Updates(map[string]interface{}{"group": org.Group, "version": gorm.Expr("version + 1")}).Error; err != nil {
 			return nil, err
 		}
+		if org.PersonalUserId != nil {
+			if err := tx.Model(&User{}).Where("id = ?", *org.PersonalUserId).Update("group", org.Group).Error; err != nil {
+				return nil, err
+			}
+		}
 		if err := RefreshOrganizationTokensTx(tx, &org); err != nil {
 			return nil, err
 		}
@@ -124,6 +133,11 @@ func downgradeOrganizationSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	if err := tx.Model(&org).Updates(map[string]interface{}{"group": group, "version": gorm.Expr("version + 1")}).Error; err != nil {
 		return "", err
 	}
+	if org.PersonalUserId != nil {
+		if err := tx.Model(&User{}).Where("id = ?", *org.PersonalUserId).Update("group", group).Error; err != nil {
+			return "", err
+		}
+	}
 	return group, RefreshOrganizationTokensTx(tx, &org)
 }
 
@@ -167,7 +181,10 @@ func PurchaseOrganizationSubscriptionWithBalance(orgID, actorID, planID int) err
 		if err := tx.Create(&order).Error; err != nil {
 			return err
 		}
-		return tx.Create(&OrganizationAudit{OrgId: orgID, ActorId: actorID, Action: "subscription.paid", ObjectId: fmt.Sprint(order.Id), Result: "success"}).Error
+		if err := tx.Create(&OrganizationAudit{OrgId: orgID, ActorId: actorID, Action: "subscription.paid", ObjectId: fmt.Sprint(order.Id), Result: "success"}).Error; err != nil {
+			return err
+		}
+		return syncPersonalOrganizationWalletTx(tx, orgID)
 	})
 }
 
@@ -183,7 +200,7 @@ func creditOrganizationTopUp(tx *gorm.DB, orgID int, quota int) error {
 	if result.RowsAffected != 1 {
 		return ErrTopUpQuotaLimitExceeded
 	}
-	return nil
+	return syncPersonalOrganizationWalletTx(tx, orgID)
 }
 
 // GetOrganizationSubscriptionPlan preserves purchased terms after edits or removal

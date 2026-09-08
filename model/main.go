@@ -85,7 +85,7 @@ func createRootAccountIfNeed() error {
 			AccessToken: nil,
 			Quota:       100000000,
 		}
-		return DB.Create(&rootUser).Error
+		return CreateUserWithPersonalOrganization(&rootUser)
 	}
 	return nil
 }
@@ -389,14 +389,17 @@ func migrateDB() error {
 			return err
 		}
 	}
-	return nil
+	return MigratePersonalOrganizations(DB)
 }
 
 func migrateLOGDB() error {
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return migrateClickHouseLogDB()
 	}
-	return LOG_DB.AutoMigrate(&Log{})
+	if err := LOG_DB.AutoMigrate(&Log{}); err != nil {
+		return err
+	}
+	return BackfillLogOrganizations(DB, LOG_DB)
 }
 
 func migrateClickHouseLogDB() error {
@@ -405,6 +408,12 @@ func migrateClickHouseLogDB() error {
 		return err
 	}
 	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS org_id Int64 DEFAULT 0").Error; err != nil {
+		return err
+	}
+	if err := BackfillClickHouseLogOrganizations(DB, LOG_DB); err != nil {
+		return err
+	}
+	if err := migrateClickHouseOrganizationOrder(ttlDays); err != nil {
 		return err
 	}
 	return syncClickHouseLogTTL(ttlDays)
@@ -460,7 +469,7 @@ CREATE TABLE IF NOT EXISTS logs (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(toDateTime(created_at))
-ORDER BY (created_at, request_id)%s`, clickHouseLogTTLClause(ttlDays))
+ORDER BY (org_id, created_at, request_id)%s`, clickHouseLogTTLClause(ttlDays))
 }
 
 func syncClickHouseLogTTL(ttlDays int) error {

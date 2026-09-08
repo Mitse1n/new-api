@@ -55,45 +55,37 @@ func organizationTestDatabase(t *testing.T) *gorm.DB {
 	return db
 }
 
-func TestOrganizationResourceScopeSeparatesAccountAndTeamOwnership(t *testing.T) {
+func TestOrganizationMigrationPreservesBalancesAndResourceOwners(t *testing.T) {
 	db := organizationTestDatabase(t)
-	users := []User{{Username: "alice", Email: "alice@example.test", AffCode: "alice", Quota: 500}, {Username: "bob", Email: "bob@example.test", AffCode: "bob"}}
+	users := []User{{Username: "alice", DisplayName: "Alice", Email: "alice@example.test", AffCode: "alice", Quota: 123456789012, UsedQuota: 123, Group: "premium"}, {Username: "bob", Email: "bob@example.test", AffCode: "bob", Quota: 200, Group: "default"}}
 	require.NoError(t, db.Create(&users).Error)
-	org, err := CreateTeamOrganization(users[0].Id, "Team", "scope-team")
+	token := Token{UserId: users[0].Id, Key: "migration-secret", Name: "existing"}
+	require.NoError(t, db.Create(&token).Error)
+	log := Log{UserId: users[0].Id, Quota: 123, Type: LogTypeConsume}
+	require.NoError(t, db.Create(&log).Error)
+	require.NoError(t, MigratePersonalOrganizations(db))
+	alice, err := GetPersonalOrganization(users[0].Id)
 	require.NoError(t, err)
-	// Creating a team must not give either account an organization of its own.
-	var organizations int64
-	require.NoError(t, db.Model(&Organization{}).Count(&organizations).Error)
-	assert.Equal(t, int64(1), organizations)
-	tokens := []Token{
-		{UserId: users[0].Id, Key: "alice-own", Name: "alice own"},
-		{UserId: users[1].Id, Key: "bob-own", Name: "bob own"},
-		{OrgId: org.Id, UserId: users[0].Id, Key: "alice-team", Name: "alice team"},
+	assert.Equal(t, int64(123456789012), alice.Quota)
+	assert.Equal(t, "premium", alice.Group)
+	require.NoError(t, db.Model(alice).Update("quota", 42).Error)
+	for i := 0; i < 2; i++ {
+		require.NoError(t, MigratePersonalOrganizations(db))
 	}
-	require.NoError(t, db.Create(&tokens).Error)
-
-	for _, test := range []struct {
-		name     string
-		scope    OrganizationResourceScope
-		expected []string
-	}{
-		{"own account", OrganizationResourceScope{UserID: users[0].Id}, []string{"alice own"}},
-		{"other account", OrganizationResourceScope{UserID: users[1].Id}, []string{"bob own"}},
-		{"team member", OrganizationResourceScope{OrgID: org.Id, UserID: users[0].Id}, []string{"alice team"}},
-		{"team all members", OrganizationResourceScope{OrgID: org.Id, UserID: users[1].Id, AllMembers: true}, []string{"alice team"}},
-		{"no owner at all", OrganizationResourceScope{}, []string{}},
-		{"negative organization", OrganizationResourceScope{OrgID: -1, UserID: users[0].Id}, []string{}},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			var found []Token
-			require.NoError(t, test.scope.Apply(db.Model(&Token{})).Order("id").Find(&found).Error)
-			names := make([]string, 0, len(found))
-			for _, token := range found {
-				names = append(names, token.Name)
-			}
-			assert.Equal(t, test.expected, names)
-		})
-	}
+	require.NoError(t, db.First(&token, token.Id).Error)
+	require.NoError(t, db.First(&log, log.Id).Error)
+	assert.Equal(t, alice.Id, token.OrgId)
+	assert.Equal(t, alice.Id, log.OrgId)
+	alice, err = GetPersonalOrganization(users[0].Id)
+	require.NoError(t, err)
+	assert.Equal(t, int64(42), alice.Quota, "migration must not copy a legacy balance again")
+	var count int64
+	require.NoError(t, db.Model(&Organization{}).Count(&count).Error)
+	assert.Equal(t, int64(2), count)
+	require.NoError(t, db.Model(&OrganizationMember{}).Count(&count).Error)
+	assert.Equal(t, int64(2), count)
+	duplicate := Organization{Slug: "another-personal", PersonalUserId: &users[0].Id}
+	assert.Error(t, db.Create(&duplicate).Error, "one personal organization is a database invariant")
 }
 
 func TestOrganizationInvitationRequiresMatchingIdentityAndPreservesAssets(t *testing.T) {

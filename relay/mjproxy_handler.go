@@ -28,9 +28,8 @@ import (
 func RelayMidjourneyImage(c *gin.Context) {
 	taskId := c.Param("id")
 	orgID, _ := strconv.Atoi(c.Query("org"))
-	userID, _ := strconv.Atoi(c.Query("user"))
 	rowID, _ := strconv.Atoi(c.Query("task"))
-	midjourneyTask, err := service.GetMidjourneyImageWithAccess(orgID, userID, rowID, taskId, c.Query(service.TaskArtifactAccessQueryParameter))
+	midjourneyTask, err := service.GetMidjourneyImageWithAccess(orgID, rowID, taskId, c.Query(service.TaskArtifactAccessQueryParameter))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "midjourney_task_not_found",
@@ -217,7 +216,7 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 		}
 	}
 
-	if info.OrgId > 0 {
+	if info.OrgId > 0 && true {
 		if apiErr := service.PreConsumeBilling(c, priceData.Quota, info); apiErr != nil {
 			return &dto.MidjourneyResponse{Code: 4, Description: apiErr.Error()}
 		}

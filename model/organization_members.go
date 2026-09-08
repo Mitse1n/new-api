@@ -86,8 +86,12 @@ func CreateOrganizationInvite(orgID, actorID int, username, role string) (*Organ
 	}
 	invite := OrganizationInvite{OrgId: orgID, Username: username, Role: role, Status: "pending", InviterId: actorID, ExpiresAt: time.Now().Add(7 * 24 * time.Hour).Unix()}
 	err := DB.Transaction(func(tx *gorm.DB) error {
-		if _, err := lockOrganizationManager(tx, orgID, actorID, false); err != nil {
+		org, err := lockOrganizationManager(tx, orgID, actorID, false)
+		if err != nil {
 			return err
+		}
+		if org.Kind == OrganizationPersonal {
+			return ErrOrganizationOwner
 		}
 		var target User
 		if err := tx.Where("username = ? AND status = ?", username, common.UserStatusEnabled).First(&target).Error; err != nil {
@@ -215,8 +219,12 @@ func UpdateOrganizationMember(orgID, actorID, userID int, role string, status in
 		return ErrOrganizationInput
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if _, err := lockOrganizationManager(tx, orgID, actorID, false); err != nil {
+		org, err := lockOrganizationManager(tx, orgID, actorID, false)
+		if err != nil {
 			return err
+		}
+		if org.Kind == OrganizationPersonal {
+			return ErrOrganizationOwner
 		}
 		var member OrganizationMember
 		if err := tx.Scopes(OrgScope(orgID)).Where("user_id = ?", userID).First(&member).Error; err != nil {
