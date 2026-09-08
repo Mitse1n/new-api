@@ -34,7 +34,7 @@ export const Route = createFileRoute('/_authenticated/wallet/')({
 function RouteComponent() {
   const { show_history } = Route.useSearch()
   const context = useOrganization()
-  if (!context.capabilities.org['org.billing']?.read) {
+  if (context && !context.capabilities.org['org.billing']?.read) {
     return (
       <Navigate to='/organization/$section' params={{ section: 'billing' }} />
     )

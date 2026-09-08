@@ -515,7 +515,7 @@ func RequestAmount(c *gin.Context) {
 
 func GetUserTopUps(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	topups, total, err := model.GetOrganizationTopUps(c.GetInt("org_id"), c.Query("keyword"), pageInfo)
+	topups, total, err := model.GetOrganizationTopUps(model.OrganizationResourceScope{OrgID: c.GetInt("org_id"), UserID: c.GetInt("id"), AllMembers: c.GetInt("org_id") > 0}, c.Query("keyword"), pageInfo)
 	if err != nil {
 		common.ApiError(c, err)
 		return

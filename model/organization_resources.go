@@ -42,9 +42,9 @@ func GetOrganizationFlowQuotaData(scope OrganizationResourceScope, start, end in
 	return rows, nil
 }
 
-func GetOrganizationTopUps(orgID int, keyword string, page *common.PageInfo) ([]*TopUp, int64, error) {
+func GetOrganizationTopUps(scope OrganizationResourceScope, keyword string, page *common.PageInfo) ([]*TopUp, int64, error) {
 	rows := make([]*TopUp, 0)
-	query := DB.Model(&TopUp{}).Scopes(OrgScope(orgID))
+	query := scope.Apply(DB.Model(&TopUp{}))
 	if keyword != "" {
 		query = query.Where("trade_no LIKE ?", "%"+keyword+"%")
 	}

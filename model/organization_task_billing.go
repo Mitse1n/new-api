@@ -84,8 +84,8 @@ func adjustOrganizationAssetQuotaTx(tx *gorm.DB, org *Organization, userID, toke
 		return result.Error
 	}
 	if receipt.Id == 0 {
-		// Only migrated tasks lack a request receipt: their initial charge was
-		// already included in the personal wallet copied during migration.
+		// Older team tasks may lack a receipt; their initial charge is already
+		// reflected in the team wallet. Only the settlement delta is applied.
 		receipt = OrganizationCharge{RequestId: requestID, OrgId: org.Id, UserId: userID, TokenId: tokenID, Quota: int64(previous), Status: "settled", SubscriptionId: subscriptionID, PeriodStart: org.BudgetPeriodStart}
 		if subscriptionID > 0 {
 			var sub UserSubscription

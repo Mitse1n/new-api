@@ -30,6 +30,7 @@ import type { QuotaDataItem } from '@/features/dashboard/types'
 import { getOrganizationSummary } from '@/features/organizations/api'
 import { useOrganization } from '@/features/organizations/context'
 import { useStatus } from '@/hooks/use-status'
+import { getAccountSummary } from '@/lib/api'
 import { getCurrencyLabel, isCurrencyDisplayEnabled } from '@/lib/currency'
 import { formatNumber, formatQuota } from '@/lib/format'
 import { computeTimeRange } from '@/lib/time'
@@ -143,13 +144,16 @@ export function SummaryCards() {
 
   const summaryTimeRange = useMemo(() => computeTimeRange(1), [])
   const organization = useOrganization()
-  const orgSummary = useQuery({
-    queryKey: ['organization-summary', organization.organization?.id],
-    queryFn: getOrganizationSummary,
+  const summary = useQuery({
+    queryKey: [
+      organization ? 'organization-summary' : 'account-summary',
+      organization?.organization.id,
+    ],
+    queryFn: organization ? getOrganizationSummary : getAccountSummary,
   })
-  const remainQuota = Number(orgSummary.data?.available_quota ?? 0)
-  const usedQuota = Number(orgSummary.data?.used_quota ?? 0)
-  const requestCount = Number(orgSummary.data?.request_count ?? 0)
+  const remainQuota = Number(summary.data?.available_quota ?? 0)
+  const usedQuota = Number(summary.data?.used_quota ?? 0)
+  const requestCount = Number(summary.data?.request_count ?? 0)
 
   const usageTrendQuery = useQuery({
     queryKey: [

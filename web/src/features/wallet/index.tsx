@@ -25,7 +25,7 @@ import { OrganizationSummary } from '@/features/organizations/components/Organiz
 import { useOrganization } from '@/features/organizations/context'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
-import { getSelf } from '@/lib/api'
+import { getAccountSummary, getSelf } from '@/lib/api'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
@@ -65,17 +65,17 @@ interface WalletProps {
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
   const context = useOrganization()
-  if (!context.capabilities.org['org.billing']?.write) {
+  if (context && !context.capabilities.org['org.billing']?.write) {
     return (
       <div className='p-5'>
         {t('Only organization owners and administrators can manage payments.')}
       </div>
     )
   }
-  return <OrganizationWallet {...props} />
+  return <WalletContent {...props} />
 }
 
-function OrganizationWallet(props: WalletProps) {
+function WalletContent(props: WalletProps) {
   const { t } = useTranslation()
   const context = useOrganization()
   const [user, setUser] = useState<UserWalletData | null>(null)
@@ -132,7 +132,7 @@ function OrganizationWallet(props: WalletProps) {
       setUserLoading(true)
       const [response, summary] = await Promise.all([
         getSelf(),
-        getOrganizationSummary(),
+        context ? getOrganizationSummary() : getAccountSummary(),
       ])
       if (response.success && response.data) {
         setUser({
@@ -148,7 +148,7 @@ function OrganizationWallet(props: WalletProps) {
     } finally {
       setUserLoading(false)
     }
-  }, [])
+  }, [context])
 
   useEffect(() => {
     fetchUser()
@@ -365,7 +365,7 @@ function OrganizationWallet(props: WalletProps) {
               />
             </div>
 
-            {context.organization === null && (
+            {context === null && (
               <AffiliateRewardsCard
                 user={user}
                 affiliateLink={affiliateLink}

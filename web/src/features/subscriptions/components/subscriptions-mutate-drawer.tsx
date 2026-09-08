@@ -492,9 +492,7 @@ export function SubscriptionsMutateDrawer({
                         </FormControl>
                         <SelectContent>
                           <SelectGroup>
-                            <SelectItem value='both'>
-                              {t('Personal and team organizations')}
-                            </SelectItem>
+                            <SelectItem value='both'>{t('All')}</SelectItem>
                             <SelectItem value='personal'>
                               {t('Personal')}
                             </SelectItem>

@@ -58,14 +58,11 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 	}
 	require.NoError(t, db.Raw(versionQuery).Scan(&version).Error)
 	t.Logf("database: %s", version)
-	owner := model.User{Username: "owner", DisplayName: "Owner Name", Password: "private-password", Email: "private@example.test", AffCode: "owner", Status: 1}
-	require.NoError(t, model.CreateUserWithPersonalOrganization(&owner))
-	personal, err := model.GetPersonalOrganization(owner.Id)
-	require.NoError(t, err)
-	require.NoError(t, db.Model(personal).Update("quota", 12345).Error)
+	owner := model.User{Username: "owner", DisplayName: "Owner Name", Password: "private-password", Email: "private@example.test", AffCode: "owner", Status: 1, Quota: 12345}
+	require.NoError(t, db.Create(&owner).Error)
 	team, err := model.CreateTeamOrganization(owner.Id, "Design team", "design")
 	require.NoError(t, err)
-	key := model.Token{OrgId: personal.Id, UserId: owner.Id, Name: "personal-key", Key: "private-token-key"}
+	key := model.Token{UserId: owner.Id, Name: "personal-key", Key: "private-token-key"}
 	require.NoError(t, db.Create(&key).Error)
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set("id", owner.Id); c.Set("role", common.RoleRootUser); c.Next() })
@@ -76,9 +73,8 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 	r.GET("/organizations/:org_id/deletion-impact", GetOrganizationDeletionImpact)
 	r.PUT("/organizations/:org_id/status", ChangeOrganizationStatus)
 	account := r.Group("/account", middleware.OrganizationContext())
-	account.GET("/context", GetOrganizationContext)
-	account.GET("/summary", GetOrganizationSummary)
-	account.GET("/tokens", GetAllTokens)
+	account.GET("/summary", GetAccountSummary)
+	account.GET("/tokens", middleware.RequireSelectedOrgPermission("org.token", "write"), GetAllTokens)
 	org := r.Group("/org", middleware.OrganizationContext(), middleware.RequireTeamOrganization())
 	org.GET("/context", GetOrganizationContext)
 	org.GET("/members", GetOrganizationMembers)
@@ -126,10 +122,7 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 	})
 	t.Run("personal account has no organization identity but retains wallet and keys", func(t *testing.T) {
 		result := request("GET", "/account/context", "", "")
-		require.Equal(t, 200, result.Code)
-		assert.Contains(t, result.Body.String(), `"organization":null`)
-		assert.Contains(t, result.Body.String(), `"membership":null`)
-		assert.NotContains(t, result.Body.String(), "org_id")
+		require.Equal(t, 404, result.Code)
 		result = request("GET", "/account/summary", "", "")
 		require.Equal(t, 200, result.Code)
 		assert.Contains(t, result.Body.String(), `"quota":12345`)
@@ -142,10 +135,10 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 		assert.NotContains(t, result.Body.String(), key.Key)
 		var stored model.Token
 		require.NoError(t, db.First(&stored, key.Id).Error)
-		assert.Equal(t, personal.Id, stored.OrgId)
+		assert.Zero(t, stored.OrgId)
 	})
-	t.Run("explicit personal organization access is rejected", func(t *testing.T) {
-		id := strconv.Itoa(personal.Id)
+	t.Run("organization endpoints require an existing team", func(t *testing.T) {
+		id := strconv.Itoa(team.Id + 1000)
 		for _, test := range []struct{ method, path, header, body string }{
 			{"GET", "/org/context", "", ""}, {"GET", "/org/members", "", ""},
 			{"GET", "/org/context", id, ""}, {"GET", "/account/tokens", id, ""},
@@ -158,9 +151,6 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 			assert.Equal(t, 403, result.Code, test.method+test.path)
 			assert.NotContains(t, result.Body.String(), "personal-")
 		}
-		var stored model.Organization
-		require.NoError(t, db.First(&stored, personal.Id).Error)
-		assert.Equal(t, model.OrganizationActive, stored.Status)
 	})
 	t.Run("teams still resolve and platform can disable and restore them", func(t *testing.T) {
 		id := strconv.Itoa(team.Id)

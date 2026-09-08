@@ -262,7 +262,31 @@ func (o *SubscriptionOrder) Insert() error {
 			return tx.Create(&OrganizationAudit{OrgId: o.OrgId, ActorId: o.UserId, Action: "subscription.checkout", ObjectId: fmt.Sprint(o.Id), Result: "success"}).Error
 		})
 	}
-	return DB.Create(o).Error
+	if o.OrgId < 0 || o.UserId <= 0 {
+		return ErrOrganizationInput
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := lockForUpdate(tx).Select("id").Where("id = ? AND status = ?", o.UserId, common.UserStatusEnabled).First(&user).Error; err != nil {
+			return err
+		}
+		plan, err := getSubscriptionPlanByIdTx(tx, o.PlanId)
+		if err != nil {
+			return err
+		}
+		if plan.PriceAmount != o.Money {
+			return errors.New("plan changed during checkout; please try again")
+		}
+		if err := ValidateAccountSubscriptionPlan(tx, o.UserId, plan); err != nil {
+			return err
+		}
+		snapshot, err := common.Marshal(plan)
+		if err != nil {
+			return err
+		}
+		o.PlanSnapshot = string(snapshot)
+		return tx.Create(o).Error
+	})
 }
 
 func (o *SubscriptionOrder) Update() error {
@@ -453,7 +477,7 @@ func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
 	}
 	var count int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND plan_id = ?", userId, planId).
+		Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND plan_id = ?", userId, planId).
 		Count(&count).Error; err != nil {
 		return 0, err
 	}
@@ -493,7 +517,7 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	}
 	// If another active upgraded subscription exists, keep the current group.
 	var activeSub UserSubscription
-	activeQuery := tx.Where("user_id = ? AND status = ? AND end_time > ? AND id <> ? AND upgrade_group <> ''",
+	activeQuery := tx.Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ? AND id <> ? AND upgrade_group <> ''",
 		sub.UserId, "active", now, sub.Id).
 		Order("end_time desc, id desc").
 		Limit(1).
@@ -521,6 +545,30 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	return target, nil
 }
 
+// ValidateAccountSubscriptionPlan is shared by checkout, balance purchases and
+// administrative grants. Completed orders honor their purchased snapshot.
+func ValidateAccountSubscriptionPlan(tx *gorm.DB, userID int, plan *SubscriptionPlan) error {
+	if userID <= 0 || plan == nil || !plan.Enabled ||
+		plan.Audience != "" && plan.Audience != "both" && plan.Audience != "personal" {
+		return errors.New("plan is not available for this account")
+	}
+	if plan.MaxPurchasePerUser <= 0 {
+		return nil
+	}
+	scope := OrganizationResourceScope{UserID: userID}
+	var purchased, pending int64
+	if err := scope.Apply(tx.Model(&UserSubscription{})).Where("plan_id = ?", plan.Id).Count(&purchased).Error; err != nil {
+		return err
+	}
+	if err := scope.Apply(tx.Model(&SubscriptionOrder{})).Where("plan_id = ? AND status = ?", plan.Id, common.TopUpStatusPending).Count(&pending).Error; err != nil {
+		return err
+	}
+	if purchased+pending >= int64(plan.MaxPurchasePerUser) {
+		return errors.New("plan purchase limit reached")
+	}
+	return nil
+}
+
 func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, source string) (*UserSubscription, error) {
 	if tx == nil {
 		return nil, errors.New("tx is nil")
@@ -531,31 +579,9 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	if userId <= 0 {
 		return nil, errors.New("invalid user id")
 	}
-	var owner User
-	if err := tx.Select("id", "personal_org_id").Where("id = ?", userId).First(&owner).Error; err != nil {
-		return nil, err
-	}
-	if owner.PersonalOrgId > 0 {
-		var org Organization
-		if err := lockForUpdate(tx).Where("id = ?", owner.PersonalOrgId).First(&org).Error; err != nil {
+	if source != "order" {
+		if err := ValidateAccountSubscriptionPlan(tx, userId, plan); err != nil {
 			return nil, err
-		}
-		if source != "order" {
-			if err := ValidateOrganizationPlan(tx, &org, plan); err != nil {
-				return nil, err
-			}
-		}
-		return CreateOrganizationSubscriptionFromPlanTx(tx, owner.PersonalOrgId, userId, plan, source)
-	}
-	if plan.MaxPurchasePerUser > 0 {
-		var count int64
-		if err := tx.Model(&UserSubscription{}).
-			Where("user_id = ? AND plan_id = ?", userId, plan.Id).
-			Count(&count).Error; err != nil {
-			return nil, err
-		}
-		if count >= int64(plan.MaxPurchasePerUser) {
-			return nil, errors.New("已达到该套餐购买上限")
 		}
 	}
 	nowUnix := GetDBTimestamp()
@@ -607,6 +633,11 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		CreatedAt:           common.GetTimestamp(),
 		UpdatedAt:           common.GetTimestamp(),
 	}
+	snapshot, err := common.Marshal(plan)
+	if err != nil {
+		return nil, err
+	}
+	sub.PlanSnapshot = string(snapshot)
 	if err := tx.Create(sub).Error; err != nil {
 		return nil, err
 	}
@@ -789,15 +820,9 @@ func AdminBindSubscription(userId int, planId int, sourceNote string) (string, e
 	}
 	groupChanged := false
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		// Personal organizations lock their wallet before the compatibility user row.
 		var userRow User
-		if err := tx.Select("id", "personal_org_id").Where("id = ?", userId).First(&userRow).Error; err != nil {
+		if err := lockForUpdate(tx).Select("id").Where("id = ?", userId).First(&userRow).Error; err != nil {
 			return err
-		}
-		if userRow.PersonalOrgId == 0 {
-			if err := lockForUpdate(tx).Select("id").Where("id = ?", userId).First(&userRow).Error; err != nil {
-				return err
-			}
 		}
 		subscription, err := CreateUserSubscriptionFromPlanTx(tx, userId, plan, "admin")
 		if err == nil {
@@ -927,7 +952,7 @@ func GetAllActiveUserSubscriptions(userId int) ([]SubscriptionSummary, error) {
 	}
 	now := common.GetTimestamp()
 	var subs []UserSubscription
-	err := DB.Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+	err := DB.Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
 		Order("end_time desc, id desc").
 		Find(&subs).Error
 	if err != nil {
@@ -945,7 +970,7 @@ func HasActiveUserSubscription(userId int) (bool, error) {
 	now := common.GetTimestamp()
 	var count int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+		Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -962,7 +987,7 @@ func UserActiveSubscriptionsAllowWalletOverflow(userId int) (bool, error) {
 	now := common.GetTimestamp()
 	var strictCount int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND status = ? AND end_time > ? AND allow_wallet_overflow = ?",
+		Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ? AND allow_wallet_overflow = ?",
 			userId, "active", now, false).
 		Count(&strictCount).Error; err != nil {
 		return false, err
@@ -976,7 +1001,7 @@ func GetAllUserSubscriptions(userId int) ([]SubscriptionSummary, error) {
 		return nil, errors.New("invalid userId")
 	}
 	var subs []UserSubscription
-	err := DB.Where("user_id = ?", userId).
+	err := DB.Where("(org_id IS NULL OR org_id = 0) AND user_id = ?", userId).
 		Order("end_time desc, id desc").
 		Find(&subs).Error
 	if err != nil {
@@ -1129,7 +1154,7 @@ func adminResetUserSubscriptionsByPlanTx(tx *gorm.DB, userId int, plan *Subscrip
 	}
 	var subs []UserSubscription
 	if err := lockForUpdate(tx).
-		Where("user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, plan.Id, "active", now).
+		Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, plan.Id, "active", now).
 		Order("end_time asc, id asc").
 		Find(&subs).Error; err != nil {
 		return nil, err
@@ -1423,11 +1448,14 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			return query.Error
 		}
 		if query.RowsAffected > 0 {
+			if existing.UserId != userId {
+				return errors.New("subscription request owner mismatch")
+			}
 			if existing.Status == "refunded" {
 				return errors.New("subscription pre-consume already refunded")
 			}
 			var sub UserSubscription
-			if err := tx.Where("id = ?", existing.UserSubscriptionId).First(&sub).Error; err != nil {
+			if err := tx.Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND id = ?", userId, existing.UserSubscriptionId).First(&sub).Error; err != nil {
 				return err
 			}
 			returnValue.UserSubscriptionId = sub.Id
@@ -1440,7 +1468,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 
 		var subs []UserSubscription
 		if err := lockForUpdate(tx).
-			Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+			Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
 			Order("end_time asc, id asc").
 			Find(&subs).Error; err != nil {
 			return errors.New("no active subscription")
@@ -1450,7 +1478,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 		}
 		for _, candidate := range subs {
 			sub := candidate
-			plan, err := getSubscriptionPlanByIdTx(tx, sub.PlanId)
+			plan, err := GetOrganizationSubscriptionPlan(tx, &sub)
 			if err != nil {
 				return err
 			}
@@ -1523,7 +1551,7 @@ func RefundSubscriptionPreConsume(requestId string) error {
 			record.Status = "refunded"
 			return tx.Save(&record).Error
 		}
-		if err := PostConsumeUserSubscriptionDelta(record.UserSubscriptionId, -record.PreConsumed); err != nil {
+		if err := postConsumeUserSubscriptionDeltaTx(tx, record.UserSubscriptionId, -record.PreConsumed); err != nil {
 			return err
 		}
 		record.Status = "refunded"
@@ -1622,20 +1650,21 @@ func PostConsumeUserSubscriptionDelta(userSubscriptionId int, delta int64) error
 		return nil
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		var sub UserSubscription
-		if err := lockForUpdate(tx).
-			Where("id = ?", userSubscriptionId).
-			First(&sub).Error; err != nil {
-			return err
-		}
-		newUsed := sub.AmountUsed + delta
-		if newUsed < 0 {
-			newUsed = 0
-		}
-		if sub.AmountTotal > 0 && newUsed > sub.AmountTotal {
-			return fmt.Errorf("subscription used exceeds total, used=%d total=%d", newUsed, sub.AmountTotal)
-		}
-		sub.AmountUsed = newUsed
-		return tx.Save(&sub).Error
+		return postConsumeUserSubscriptionDeltaTx(tx, userSubscriptionId, delta)
 	})
+}
+
+func postConsumeUserSubscriptionDeltaTx(tx *gorm.DB, userSubscriptionID int, delta int64) error {
+	var sub UserSubscription
+	if err := lockForUpdate(tx).Where("id = ?", userSubscriptionID).First(&sub).Error; err != nil {
+		return err
+	}
+	if sub.AmountUsed < 0 || delta > 0 && (delta > int64(common.MaxWalletQuota) || sub.AmountUsed > int64(common.MaxWalletQuota)-delta) {
+		return errors.New("subscription usage exceeds quota limit")
+	}
+	newUsed := max(int64(0), sub.AmountUsed+delta)
+	if sub.AmountTotal > 0 && newUsed > sub.AmountTotal {
+		return fmt.Errorf("subscription used exceeds total, used=%d total=%d", newUsed, sub.AmountTotal)
+	}
+	return tx.Model(&sub).Update("amount_used", newUsed).Error
 }

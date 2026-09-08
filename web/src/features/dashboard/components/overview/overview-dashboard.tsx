@@ -53,7 +53,7 @@ import { getOrganizationSummary } from '@/features/organizations/api'
 import { useOrganization } from '@/features/organizations/context'
 import { usePlatformView } from '@/features/organizations/platform-view'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { getUserModels } from '@/lib/api'
+import { getAccountSummary, getUserModels } from '@/lib/api'
 import { MOTION_TRANSITION } from '@/lib/motion'
 import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
@@ -473,13 +473,16 @@ export function OverviewDashboard() {
   >(() => getSavedSetupGuideExpanded())
 
   const organization = useOrganization()
-  const orgSummary = useQuery({
-    queryKey: ['organization-summary', organization.organization?.id],
-    queryFn: getOrganizationSummary,
+  const summary = useQuery({
+    queryKey: [
+      organization ? 'organization-summary' : 'account-summary',
+      organization?.organization.id,
+    ],
+    queryFn: organization ? getOrganizationSummary : getAccountSummary,
   })
-  const requestCount = Number(orgSummary.data?.request_count ?? 0)
-  const remainQuota = Number(orgSummary.data?.available_quota ?? 0)
-  const usedQuota = Number(orgSummary.data?.used_quota ?? 0)
+  const requestCount = Number(summary.data?.request_count ?? 0)
+  const remainQuota = Number(summary.data?.available_quota ?? 0)
+  const usedQuota = Number(summary.data?.used_quota ?? 0)
   const platform = usePlatformView()
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN) && platform
 

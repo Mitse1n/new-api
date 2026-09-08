@@ -13,14 +13,12 @@ func TestOrganizationMemberRevocationDisablesOnlyTheirKeysAndPreservesSettlement
 	for _, status := range []int{OrganizationDisabled, OrganizationDeleting} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
 			db, org, users := organizationBillingFixture(t)
-			personal, err := EnsurePersonalOrganization(db, &users[1])
-			require.NoError(t, err)
 			other, err := CreateTeamOrganization(users[1].Id, "Other", "other-private-keys")
 			require.NoError(t, err)
 			keys := []Token{
 				{OrgId: org.Id, UserId: users[1].Id, Key: "member-revoked", Status: common.TokenStatusEnabled, ExpiredTime: -1, UnlimitedQuota: true},
 				{OrgId: org.Id, UserId: users[0].Id, Key: "owner-unaffected", Status: common.TokenStatusEnabled},
-				{OrgId: personal.Id, UserId: users[1].Id, Key: "personal-unaffected", Status: common.TokenStatusEnabled},
+				{UserId: users[1].Id, Key: "personal-unaffected", Status: common.TokenStatusEnabled},
 				{OrgId: other.Id, UserId: users[1].Id, Key: "other-unaffected", Status: common.TokenStatusEnabled},
 			}
 			require.NoError(t, db.Create(&keys).Error)
@@ -71,7 +69,7 @@ func TestOrganizationStartupRevokesLegacyInactiveMemberKeysIdempotently(t *testi
 	require.NoError(t, db.Create(&keys).Error)
 	require.NoError(t, db.Model(&OrganizationMember{}).Where("org_id = ? AND user_id = ?", org.Id, users[1].Id).Update("status", OrganizationDeleting).Error)
 	for i := 0; i < 2; i++ {
-		require.NoError(t, MigratePersonalOrganizations(db))
+		require.NoError(t, DisableInactiveOrganizationTokens(db))
 	}
 	for i, key := range keys {
 		var saved Token

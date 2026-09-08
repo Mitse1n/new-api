@@ -8,6 +8,13 @@ import (
 )
 
 func InsertOrganizationToken(token *Token) error {
+	if token == nil || token.UserId <= 0 || token.OrgId < 0 {
+		return ErrOrganizationInput
+	}
+	if token.OrgId == 0 {
+		token.OrgStatus, token.OrgGroup, token.OrgSettings = 0, "", ""
+		return token.Insert()
+	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var org Organization
 		if err := lockForUpdate(tx).Where("id = ? AND status = ?", token.OrgId, OrganizationActive).First(&org).Error; err != nil {
@@ -50,6 +57,12 @@ type OrganizationResourceScope struct {
 }
 
 func (scope OrganizationResourceScope) Apply(db *gorm.DB) *gorm.DB {
+	if scope.OrgID < 0 || scope.UserID <= 0 && (scope.OrgID == 0 || !scope.AllMembers) {
+		return db.Where("1 = 0")
+	}
+	if scope.OrgID == 0 {
+		return db.Where("(org_id IS NULL OR org_id = 0) AND user_id = ?", scope.UserID)
+	}
 	db = db.Scopes(OrgScope(scope.OrgID))
 	if !scope.AllMembers {
 		db = db.Where("user_id = ?", scope.UserID)
@@ -64,7 +77,7 @@ type OrganizationTokenScope struct {
 }
 
 func (scope OrganizationTokenScope) Apply(db *gorm.DB) *gorm.DB {
-	return db.Scopes(OrgScope(scope.OrgID)).Where("user_id = ?", scope.UserID)
+	return (OrganizationResourceScope{OrgID: scope.OrgID, UserID: scope.UserID}).Apply(db)
 }
 
 func GetOrganizationToken(scope OrganizationTokenScope, id int) (*Token, error) {
@@ -127,12 +140,22 @@ func DeleteOrganizationTokens(scope OrganizationTokenScope, ids []int) (int64, e
 		if result.Error != nil {
 			return result.Error
 		}
+		if scope.OrgID == 0 {
+			return nil
+		}
 		return tx.Create(&OrganizationAudit{OrgId: scope.OrgID, ActorId: scope.UserID, Action: "token.delete", ObjectId: fmt.Sprint(ids), Result: "success"}).Error
 	})
 	return count, err
 }
 
 func (scope OrganizationTokenScope) AuthorizeWrite(tx *gorm.DB) error {
+	if scope.UserID <= 0 || scope.OrgID < 0 {
+		return ErrOrganizationAccess
+	}
+	if scope.OrgID == 0 {
+		var user User
+		return lockForUpdate(tx).Select("id").Where("id = ? AND status = ?", scope.UserID, common.UserStatusEnabled).First(&user).Error
+	}
 	var org Organization
 	if err := lockForUpdate(tx).Where("id = ? AND status = ?", scope.OrgID, OrganizationActive).First(&org).Error; err != nil {
 		return ErrOrganizationAccess
@@ -162,6 +185,9 @@ func UpdateOrganizationToken(scope OrganizationTokenScope, token *Token, statusO
 		}
 		if err := tx.Model(&current).Select(fields).Updates(token).Error; err != nil {
 			return err
+		}
+		if scope.OrgID == 0 {
+			return nil
 		}
 		return tx.Create(&OrganizationAudit{OrgId: scope.OrgID, ActorId: scope.UserID, Action: "token.update", ObjectId: fmt.Sprint(token.Id), Result: "success"}).Error
 	})

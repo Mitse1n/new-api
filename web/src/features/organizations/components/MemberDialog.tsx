@@ -122,7 +122,7 @@ export function MemberDialog(props: {
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {context.organization?.name} ·{' '}
+            {context?.organization.name} ·{' '}
             {t('Changes apply to this organization only.')}
           </DialogDescription>
         </DialogHeader>

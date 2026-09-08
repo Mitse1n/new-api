@@ -90,15 +90,7 @@ async function renderCreateDrawer(): Promise<void> {
   useOrganizationStore.setState({
     userID: 1,
     activeOrgID: null,
-    context: {
-      pending_transfer: false,
-      organization: null,
-      membership: null,
-      capabilities: {
-        platform: {},
-        org: { 'org.token': { write: true, read: true } },
-      },
-    },
+    context: null,
   })
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },

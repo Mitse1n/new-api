@@ -138,7 +138,7 @@ func GetByMJId(userId int, mjId string, orgIDs ...int) *Midjourney {
 	var err error
 	query := DB
 	if len(orgIDs) > 0 {
-		query = query.Scopes(OrgScope(orgIDs[0]))
+		query = (OrganizationResourceScope{OrgID: orgIDs[0], UserID: userId}).Apply(query)
 	}
 	err = query.Where("user_id = ? and mj_id = ?", userId, mjId).First(&mj).Error
 	if err != nil {
@@ -152,7 +152,7 @@ func GetByMJIds(userId int, mjIds []string, orgIDs ...int) []*Midjourney {
 	var err error
 	query := DB
 	if len(orgIDs) > 0 {
-		query = query.Scopes(OrgScope(orgIDs[0]))
+		query = (OrganizationResourceScope{OrgID: orgIDs[0], UserID: userId}).Apply(query)
 	}
 	err = query.Where("user_id = ? and mj_id in (?)", userId, mjIds).Find(&mj).Error
 	if err != nil {

@@ -47,9 +47,9 @@ export function OrganizationSummary() {
   })
   const platform = usePlatformView()
   const summary = useQuery({
-    queryKey: ['organization-summary', context.organization?.id],
+    queryKey: ['organization-summary', context?.organization.id],
     queryFn: getOrganizationSummary,
-    enabled: !platform && context.organization !== null,
+    enabled: !platform && context !== null,
   })
   if (platform) {
     return (
@@ -59,7 +59,7 @@ export function OrganizationSummary() {
       </div>
     )
   }
-  if (context.organization === null) return null
+  if (context === null) return null
   const data = summary.data
   const roleLabels = {
     owner: t('Owner'),

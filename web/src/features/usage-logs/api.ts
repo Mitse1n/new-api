@@ -43,9 +43,9 @@ function buildApiPath(
   platform: boolean
 ): string {
   const state = useOrganizationStore.getState()
-  if (state.context && !platform) {
+  if (!platform) {
     if (endpoint === '/api/log') {
-      return state.context.organization ? '/api/org/logs' : '/api/account/logs'
+      return state.activeOrgID !== null ? '/api/org/logs' : '/api/account/logs'
     }
     return `${endpoint}/self`
   }

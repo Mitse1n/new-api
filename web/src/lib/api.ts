@@ -39,6 +39,25 @@ export type { ApiRequestConfig } from '@/lib/http-client'
 // User APIs
 // ============================================================================
 
+export type AccountSummary = {
+  available_quota: number
+  request_count: number
+  quota: number
+  used_quota: number
+  group: string
+  key_count: number
+}
+
+export async function getAccountSummary(): Promise<AccountSummary> {
+  const response = await api.get<{
+    success: boolean
+    data: AccountSummary
+    message?: string
+  }>('/api/account/summary', { skipOrganizationContext: true })
+  if (!response.data.success) throw new Error(response.data.message)
+  return response.data.data
+}
+
 export async function getSelf() {
   const res = await api.get('/api/user/self', {
     skipErrorHandler: true,

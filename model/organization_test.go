@@ -55,37 +55,38 @@ func organizationTestDatabase(t *testing.T) *gorm.DB {
 	return db
 }
 
-func TestOrganizationMigrationPreservesBalancesAndResourceOwners(t *testing.T) {
+func TestAccountAndTeamResourceIsolation(t *testing.T) {
 	db := organizationTestDatabase(t)
-	users := []User{{Username: "alice", DisplayName: "Alice", Email: "alice@example.test", AffCode: "alice", Quota: 123456789012, UsedQuota: 123, Group: "premium"}, {Username: "bob", Email: "bob@example.test", AffCode: "bob", Quota: 200, Group: "default"}}
+	users := []User{{Username: "alice", AffCode: "alice", Quota: 500}, {Username: "bob", AffCode: "bob"}}
 	require.NoError(t, db.Create(&users).Error)
-	token := Token{UserId: users[0].Id, Key: "migration-secret", Name: "existing"}
-	require.NoError(t, db.Create(&token).Error)
-	log := Log{UserId: users[0].Id, Quota: 123, Type: LogTypeConsume}
-	require.NoError(t, db.Create(&log).Error)
-	require.NoError(t, MigratePersonalOrganizations(db))
-	alice, err := GetPersonalOrganization(users[0].Id)
+	org, err := CreateTeamOrganization(users[0].Id, "Team", "team")
 	require.NoError(t, err)
-	assert.Equal(t, int64(123456789012), alice.Quota)
-	assert.Equal(t, "premium", alice.Group)
-	require.NoError(t, db.Model(alice).Update("quota", 42).Error)
-	for i := 0; i < 2; i++ {
-		require.NoError(t, MigratePersonalOrganizations(db))
+	keys := []Token{
+		{UserId: users[0].Id, Key: "alice-personal", Name: "alice"},
+		{UserId: users[1].Id, Key: "bob-personal", Name: "bob"},
+		{OrgId: org.Id, UserId: users[0].Id, Key: "team-key", Name: "team"},
 	}
-	require.NoError(t, db.First(&token, token.Id).Error)
-	require.NoError(t, db.First(&log, log.Id).Error)
-	assert.Equal(t, alice.Id, token.OrgId)
-	assert.Equal(t, alice.Id, log.OrgId)
-	alice, err = GetPersonalOrganization(users[0].Id)
-	require.NoError(t, err)
-	assert.Equal(t, int64(42), alice.Quota, "migration must not copy a legacy balance again")
+	require.NoError(t, db.Create(&keys).Error)
+	for _, test := range []struct {
+		name  string
+		scope OrganizationResourceScope
+		names []string
+	}{
+		{"account", OrganizationResourceScope{UserID: users[0].Id}, []string{"alice"}},
+		{"account cannot widen", OrganizationResourceScope{UserID: users[0].Id, AllMembers: true}, []string{"alice"}},
+		{"team", OrganizationResourceScope{OrgID: org.Id, UserID: users[0].Id}, []string{"team"}},
+		{"missing user", OrganizationResourceScope{AllMembers: true}, []string{}},
+		{"negative organization", OrganizationResourceScope{OrgID: -1, UserID: users[0].Id}, []string{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var names []string
+			require.NoError(t, test.scope.Apply(db.Model(&Token{})).Pluck("name", &names).Error)
+			assert.ElementsMatch(t, test.names, names)
+		})
+	}
 	var count int64
 	require.NoError(t, db.Model(&Organization{}).Count(&count).Error)
-	assert.Equal(t, int64(2), count)
-	require.NoError(t, db.Model(&OrganizationMember{}).Count(&count).Error)
-	assert.Equal(t, int64(2), count)
-	duplicate := Organization{Slug: "another-personal", PersonalUserId: &users[0].Id}
-	assert.Error(t, db.Create(&duplicate).Error, "one personal organization is a database invariant")
+	assert.Equal(t, int64(1), count)
 }
 
 func TestOrganizationInvitationRequiresMatchingIdentityAndPreservesAssets(t *testing.T) {

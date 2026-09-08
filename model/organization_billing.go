@@ -163,23 +163,11 @@ func reserveOrganizationCharge(orgID, userID, tokenID int, requestID string, amo
 			if err := tx.Model(&receipt).Update("quota", amount).Error; err != nil {
 				return err
 			}
-			return syncPersonalOrganizationWalletTx(tx, orgID)
+			return nil
 		}
 		receipt = OrganizationCharge{RequestId: requestID, OrgId: orgID, UserId: userID, TokenId: tokenID, TokenQuotaManaged: manageToken, PeriodStart: period, Quota: amount, Status: "reserved"}
-		preference := "subscription_first"
-		if org.Kind == OrganizationPersonal && org.PersonalUserId != nil {
-			var owner User
-			if err := tx.Select("setting").Where("id = ?", *org.PersonalUserId).First(&owner).Error; err != nil {
-				return err
-			}
-			preference = common.NormalizeBillingPreference(owner.GetSetting().BillingPreference)
-		}
-		allowWallet := preference != "subscription_only"
-		walletPreferred := preference == "wallet_only" || preference == "wallet_first" && org.Quota >= amount
+		allowWallet := true
 		for _, sub := range subs {
-			if walletPreferred {
-				break
-			}
 			if !sub.AllowWalletOverflow {
 				allowWallet = false
 			}
@@ -207,7 +195,7 @@ func reserveOrganizationCharge(orgID, userID, tokenID int, requestID string, amo
 		if err := tx.Create(&receipt).Error; err != nil {
 			return err
 		}
-		return syncPersonalOrganizationWalletTx(tx, orgID)
+		return nil
 	})
 	return &receipt, err
 }
@@ -297,7 +285,7 @@ func finalizeOrganizationChargeTx(tx *gorm.DB, orgID int, requestID string, actu
 		}
 	}
 
-	return syncPersonalOrganizationWalletTx(tx, orgID)
+	return nil
 }
 
 // adjustOrganizationTokenQuotaTx serializes a Key's hard limit with its wallet.

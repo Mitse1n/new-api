@@ -14,10 +14,14 @@ import (
 // both database identity and organization prevents upstream task-ID collisions from
 // exposing a different organization's image.
 func BuildMidjourneyImageURL(task *model.Midjourney) (string, error) {
-	if task == nil || task.OrgId <= 0 || task.Id <= 0 || task.MjId == "" {
+	if task == nil || task.OrgId < 0 || task.OrgId == 0 && task.UserId <= 0 || task.Id <= 0 || task.MjId == "" {
 		return "", ErrTaskArtifactAccessInvalid
 	}
-	access, err := IssueTaskArtifactAccess(fmt.Sprintf("mj:%d:%d", task.OrgId, task.Id), "image:"+task.MjId)
+	scope := fmt.Sprintf("mj:%d:%d", task.OrgId, task.Id)
+	if task.OrgId == 0 {
+		scope = fmt.Sprintf("mj:user:%d:%d", task.UserId, task.Id)
+	}
+	access, err := IssueTaskArtifactAccess(scope, "image:"+task.MjId)
 	if err != nil {
 		return "", err
 	}
@@ -26,16 +30,28 @@ func BuildMidjourneyImageURL(task *model.Midjourney) (string, error) {
 }
 
 func GetMidjourneyImageWithAccess(orgID, rowID int, taskID, access string) (*model.Midjourney, error) {
-	if orgID <= 0 || rowID <= 0 || !VerifyTaskArtifactAccess(access, fmt.Sprintf("mj:%d:%d", orgID, rowID), "image:"+taskID) {
-		return nil, ErrTaskArtifactAccessInvalid
-	}
-	var org model.Organization
-	if err := model.DB.Where("id = ? AND status = ?", orgID, model.OrganizationActive).First(&org).Error; err != nil {
+	if orgID < 0 || rowID <= 0 {
 		return nil, ErrTaskArtifactAccessInvalid
 	}
 	var task model.Midjourney
-	if err := model.DB.Scopes(model.OrgScope(orgID)).Where("id = ? AND mj_id = ?", rowID, taskID).First(&task).Error; err != nil {
+	if err := model.DB.Where("org_id = ? AND id = ? AND mj_id = ?", orgID, rowID, taskID).First(&task).Error; err != nil {
 		return nil, ErrTaskArtifactAccessInvalid
+	}
+	scope := fmt.Sprintf("mj:%d:%d", orgID, rowID)
+	if orgID == 0 {
+		if task.UserId <= 0 {
+			return nil, ErrTaskArtifactAccessInvalid
+		}
+		scope = fmt.Sprintf("mj:user:%d:%d", task.UserId, rowID)
+	}
+	if !VerifyTaskArtifactAccess(access, scope, "image:"+taskID) {
+		return nil, ErrTaskArtifactAccessInvalid
+	}
+	if orgID > 0 {
+		var org model.Organization
+		if err := model.DB.Where("id = ? AND status = ?", orgID, model.OrganizationActive).First(&org).Error; err != nil {
+			return nil, ErrTaskArtifactAccessInvalid
+		}
 	}
 	return &task, nil
 }

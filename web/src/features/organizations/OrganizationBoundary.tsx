@@ -59,10 +59,10 @@ export function OrganizationBoundary(props: { children: ReactNode }) {
       !!userID &&
       boundUserID === userID &&
       organizations.isSuccess &&
-      (activeOrgID === null ||
-        organizations.data.some(
-          (org) => org.id === activeOrgID && org.status === 1
-        )),
+      activeOrgID !== null &&
+      organizations.data.some(
+        (org) => org.id === activeOrgID && org.status === 1
+      ),
     staleTime: 0,
     retry: false,
   })
@@ -73,8 +73,8 @@ export function OrganizationBoundary(props: { children: ReactNode }) {
   }, [selection.data, epoch])
   if (
     userID !== boundUserID ||
-    !context ||
-    (context.organization?.id ?? null) !== activeOrgID
+    !organizations.isSuccess ||
+    (activeOrgID !== null && context?.organization.id !== activeOrgID)
   ) {
     const failed = organizations.isError || selection.isError
     return (
@@ -88,7 +88,7 @@ export function OrganizationBoundary(props: { children: ReactNode }) {
             <Button
               onClick={() => {
                 void organizations.refetch()
-                void selection.refetch()
+                if (activeOrgID !== null) void selection.refetch()
               }}
             >
               {t('Retry')}

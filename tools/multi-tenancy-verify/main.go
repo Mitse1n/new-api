@@ -34,23 +34,13 @@ func main() {
 			panic(err)
 		}
 		for _, user := range users {
-			org, err := model.GetPersonalOrganization(user.Id)
-			if err != nil {
-				panic(err)
-			}
-			if org.Quota != int64(user.Quota) || org.UsedQuota != int64(user.UsedQuota) || org.Group != user.Group {
-				panic("personal wallet or group changed during migration")
-			}
 			var count int64
-			if err := model.DB.Model(&model.OrganizationMember{}).Where("org_id = ? AND user_id = ? AND role = ?", org.Id, user.Id, model.OrgRoleOwner).Count(&count).Error; err != nil || count != 1 {
-				panic("personal owner membership was not preserved")
-			}
 			for _, resource := range []interface{}{&model.Token{}, &model.TopUp{}, &model.UserSubscription{}, &model.SubscriptionOrder{}, &model.Task{}, &model.Midjourney{}, &model.QuotaData{}} {
-				if err := model.DB.Unscoped().Model(resource).Where("user_id = ? AND (org_id IS NULL OR org_id <> ?)", user.Id, org.Id).Count(&count).Error; err != nil || count != 0 {
+				if err := model.DB.Unscoped().Model(resource).Where("user_id = ? AND org_id > 0", user.Id).Count(&count).Error; err != nil || count != 0 {
 					panic(fmt.Sprintf("resource ownership failed: %T, %v", resource, err))
 				}
 			}
-			if err := model.LOG_DB.Model(&model.Log{}).Where("user_id = ? AND (org_id IS NULL OR org_id <> ?)", user.Id, org.Id).Count(&count).Error; err != nil || count != 0 {
+			if err := model.LOG_DB.Model(&model.Log{}).Where("user_id = ? AND org_id > 0", user.Id).Count(&count).Error; err != nil || count != 0 {
 				panic("log ownership failed")
 			}
 			if user.Username == "legacy-owner" {
@@ -70,7 +60,7 @@ func main() {
 		for _, spec := range []struct {
 			resource interface{}
 			index    string
-		}{{&model.Organization{}, "idx_organizations_slug"}, {&model.Organization{}, "idx_organizations_personal_user_id"}, {&model.OrganizationMember{}, "idx_org_member"}, {&model.OrganizationCharge{}, "idx_organization_charges_request_id"}} {
+		}{{&model.Organization{}, "idx_organizations_slug"}, {&model.OrganizationMember{}, "idx_org_member"}, {&model.OrganizationCharge{}, "idx_organization_charges_request_id"}} {
 			if !model.DB.Migrator().HasIndex(spec.resource, spec.index) {
 				panic("missing index: " + spec.index)
 			}

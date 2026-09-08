@@ -9,11 +9,9 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 const (
-	OrganizationPersonal = "personal"
 	OrganizationTeam     = "team"
 	OrganizationActive   = 1
 	OrganizationDisabled = 2
@@ -32,14 +30,13 @@ var (
 	organizationSlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
 
-// Organization is the tenant and billing owner. PersonalUserId is nullable so
-// the database enforces one personal organization per user on every dialect.
+// Organization owns a team wallet and resources. Personal resources belong
+// directly to their user and have org_id zero.
 type Organization struct {
 	Id                int            `json:"id"`
 	Name              string         `json:"name" gorm:"type:varchar(64);not null"`
 	Slug              string         `json:"slug" gorm:"type:varchar(64);uniqueIndex;not null"`
 	OwnerId           int            `json:"owner_id" gorm:"index"`
-	PersonalUserId    *int           `json:"-" gorm:"uniqueIndex"`
 	Kind              string         `json:"kind" gorm:"type:varchar(16);not null"`
 	Status            int            `json:"status" gorm:"not null"`
 	Group             string         `json:"group" gorm:"type:varchar(64);not null"`
@@ -108,59 +105,6 @@ func OrgScope(orgID int) func(*gorm.DB) *gorm.DB {
 	}
 }
 
-func EnsurePersonalOrganization(tx *gorm.DB, user *User) (*Organization, error) {
-	if user == nil || user.Id <= 0 {
-		return nil, ErrOrganizationInput
-	}
-	var org Organization
-	err := tx.Unscoped().Where("personal_user_id = ?", user.Id).First(&org).Error
-	if err == nil {
-		user.PersonalOrgId = org.Id
-		return &org, tx.Model(&User{}).Where("id = ?", user.Id).Update("personal_org_id", org.Id).Error
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-	name := user.DisplayName
-	if name == "" {
-		name = user.Username
-	}
-	org = Organization{Name: name, Slug: fmt.Sprintf("personal-%d", user.Id), OwnerId: user.Id,
-		PersonalUserId: &user.Id, Kind: OrganizationPersonal, Status: OrganizationActive,
-		Group: user.Group, Quota: int64(user.Quota), UsedQuota: int64(user.UsedQuota), Version: 1}
-	if org.Group == "" {
-		org.Group = "default"
-	}
-	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&org).Error; err != nil {
-		return nil, err
-	}
-	if err := tx.Unscoped().Where("personal_user_id = ?", user.Id).First(&org).Error; err != nil {
-		return nil, err
-	}
-	member := OrganizationMember{OrgId: org.Id, UserId: user.Id, Role: OrgRoleOwner, Status: OrganizationActive}
-	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&member).Error; err != nil {
-		return nil, err
-	}
-	user.PersonalOrgId = org.Id
-	return &org, tx.Model(&User{}).Where("id = ?", user.Id).Update("personal_org_id", org.Id).Error
-}
-
-func GetPersonalOrganization(userID int) (*Organization, error) {
-	var org Organization
-	err := DB.Where("personal_user_id = ?", userID).First(&org).Error
-	return &org, err
-}
-
-func CreateUserWithPersonalOrganization(user *User) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(user).Error; err != nil {
-			return err
-		}
-		_, err := EnsurePersonalOrganization(tx, user)
-		return err
-	})
-}
-
 func GetOrganizationMembership(orgID, userID int) (*Organization, *OrganizationMember, error) {
 	if orgID <= 0 || userID <= 0 {
 		return nil, nil, ErrOrganizationAccess
@@ -185,7 +129,7 @@ func GetOrganizationMembership(orgID, userID int) (*Organization, *OrganizationM
 func CreateTeamOrganization(userID int, name, slug string) (*Organization, error) {
 	name, slug = strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(slug))
 	if userID <= 0 || name == "" || utf8.RuneCountInString(name) > 64 || len(slug) > 64 ||
-		!organizationSlugPattern.MatchString(slug) || strings.HasPrefix(slug, "personal-") {
+		!organizationSlugPattern.MatchString(slug) {
 		return nil, ErrOrganizationInput
 	}
 	org := Organization{Name: name, Slug: slug, OwnerId: userID, Kind: OrganizationTeam,

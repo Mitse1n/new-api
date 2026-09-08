@@ -52,22 +52,20 @@ func TestOrganizationCachedTokenNeedsNoOrganizationLookupAndInvalidatesOnDisable
 	assert.ErrorIs(t, err, ErrTokenInvalid, "member revocation must invalidate a warm relay token cache")
 }
 
-func TestOrganizationPersonalWalletFallsBackWhenRedisIsUnavailable(t *testing.T) {
-	db, _, users := organizationBillingFixture(t)
-	org, err := EnsurePersonalOrganization(db, &users[0])
-	require.NoError(t, err)
+func TestOrganizationWalletRemainsIndependentWhenRedisIsUnavailable(t *testing.T) {
+	db, org, users := organizationBillingFixture(t)
 	oldRDB, oldEnabled := common.RDB, common.RedisEnabled
 	common.RDB = redis.NewClient(&redis.Options{MaxRetries: -1, Dialer: func(context.Context, string, string) (net.Conn, error) {
 		return nil, errors.New("fixture Redis unavailable")
 	}})
 	common.RedisEnabled = true
 	t.Cleanup(func() { require.NoError(t, common.RDB.Close()); common.RDB, common.RedisEnabled = oldRDB, oldEnabled })
-	_, err = ReserveOrganizationCharge(org.Id, users[0].Id, 0, "redis-fallback", 100)
+	_, err := ReserveOrganizationCharge(org.Id, users[0].Id, 0, "redis-fallback", 100)
 	require.NoError(t, err)
 	require.NoError(t, FinalizeOrganizationCharge(org.Id, "redis-fallback", 75, false))
 	require.NoError(t, FinalizeOrganizationCharge(org.Id, "redis-fallback", 75, false))
 	require.NoError(t, db.First(org, org.Id).Error)
 	require.NoError(t, db.First(&users[0], users[0].Id).Error)
-	assert.Equal(t, int64(924), org.Quota)
-	assert.Equal(t, 924, users[0].Quota)
+	assert.Equal(t, int64(925), org.Quota)
+	assert.Equal(t, 999, users[0].Quota, "team billing must not change the user wallet")
 }

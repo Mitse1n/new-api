@@ -32,7 +32,7 @@ import { useOrganization } from './context'
 export function OrganizationPage(props: { section: string }) {
   const { t } = useTranslation()
   const context = useOrganization()
-  if (context.organization === null && props.section !== 'settings') {
+  if (context === null && props.section !== 'settings') {
     return (
       <Navigate to='/dashboard/$section' params={{ section: 'overview' }} />
     )
@@ -49,17 +49,19 @@ export function OrganizationPage(props: { section: string }) {
       title = t('Plans & orders')
       content = <PlansAndOrders />
       permitted =
-        context.capabilities.org['org.subscription']?.purchase === true
+        context?.capabilities.org['org.subscription']?.purchase === true
       break
     case 'settings':
       title = t('Organization settings')
       content = <Settings />
-      permitted = context.capabilities.org['org.settings']?.write === true
+      permitted =
+        context === null ||
+        context.capabilities.org['org.settings']?.write === true
       break
     case 'audit':
       title = t('Organization audit')
       content = <Audit />
-      permitted = context.capabilities.org['org.usage']?.read_all === true
+      permitted = context?.capabilities.org['org.usage']?.read_all === true
       break
     case 'members':
       break
@@ -76,7 +78,7 @@ export function OrganizationPage(props: { section: string }) {
       <SectionPageLayout.Title>{title}</SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='flex flex-col gap-5 px-4 pb-6'>
-          {context.organization !== null && <OrganizationSummary />}
+          {context !== null && <OrganizationSummary />}
           {permitted ? (
             content
           ) : (

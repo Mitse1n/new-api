@@ -81,25 +81,23 @@ export function OrganizationSwitcher() {
         }
       >
         <span className='mt-org-icon blue'>
-          {context.logo && context.organization !== null ? (
+          {context?.logo ? (
             <img
-              src={context.logo}
+              src={context?.logo}
               alt=''
               className='size-5 rounded object-contain'
             />
           ) : (
             <HugeiconsIcon
-              icon={context.organization === null ? UserIcon : Building03Icon}
+              icon={context === null ? UserIcon : Building03Icon}
               size={18}
             />
           )}
         </span>
         <span className='mt-org-name'>
-          {context.organization === null
-            ? t('Personal')
-            : context.organization.name}
+          {context === null ? t('Personal') : context.organization.name}
         </span>
-        {context.organization !== null && context.membership && (
+        {context !== null && (
           <Badge variant='outline'>{roleLabels[context.membership.role]}</Badge>
         )}
         <HugeiconsIcon icon={ArrowDown01Icon} size={16} />
@@ -128,9 +126,7 @@ export function OrganizationSwitcher() {
               <HugeiconsIcon icon={UserIcon} size={18} />
             </span>
             <strong>{t('Personal')}</strong>
-            {context.organization === null && (
-              <HugeiconsIcon icon={Tick02Icon} size={16} />
-            )}
+            {context === null && <HugeiconsIcon icon={Tick02Icon} size={16} />}
           </button>
         )}
         <Separator className='mt-2' />
@@ -173,7 +169,7 @@ export function OrganizationSwitcher() {
                     : t('Disabled — click to restore')}
                 </small>
               </span>
-              {org.id === context.organization?.id && (
+              {org.id === context?.organization.id && (
                 <HugeiconsIcon icon={Tick02Icon} size={16} />
               )}
             </button>

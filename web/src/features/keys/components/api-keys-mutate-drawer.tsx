@@ -397,9 +397,9 @@ export function ApiKeysMutateDrawer({
             {isUpdate ? t('Update API Key') : t('Create API Key')}
           </SheetTitle>
           <SheetDescription>
-            {organization.organization
+            {organization?.organization
               ? t('Organization: {{name}}', {
-                  name: organization.organization.name,
+                  name: organization?.organization.name,
                 })
               : t('Personal')}
             {' · '}
@@ -803,12 +803,12 @@ export function ApiKeysMutateDrawer({
           }}
           title={t('Create API Key')}
           desc={
-            organization.organization === null
+            organization === null
               ? t('Create an API key for yourself using your personal balance?')
               : t(
                   'You manage this API key. Usage will be deducted from {{name}} quota.',
                   {
-                    name: organization.organization.name,
+                    name: organization?.organization.name,
                   }
                 )
           }

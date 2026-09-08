@@ -446,7 +446,7 @@ func GetByTaskIdsForPlatforms(userID int, platforms []constant.TaskPlatform, tas
 	var tasks []*Task
 	query := DB
 	if len(orgIDs) > 0 {
-		query = query.Scopes(OrgScope(orgIDs[0]))
+		query = (OrganizationResourceScope{OrgID: orgIDs[0], UserID: userID}).Apply(query)
 	}
 	err := query.
 		Where("user_id = ? AND platform IN ? AND task_id IN ?", userID, platforms, taskIDs).

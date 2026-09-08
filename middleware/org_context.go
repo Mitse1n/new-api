@@ -12,18 +12,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// OrganizationContext follows UserAuth. Never infer authorization from a
-// platform role or from a previously saved browser selection.
+// OrganizationContext resolves an explicitly selected team after UserAuth.
+// Without X-Org-Id, resources and billing belong directly to the user.
 func OrganizationContext() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		orgID, err := strconv.Atoi(c.GetHeader("X-Org-Id"))
-		if c.GetHeader("X-Org-Id") == "" {
-			personal, personalErr := model.GetPersonalOrganization(c.GetInt("id"))
-			err = personalErr
-			if personalErr == nil {
-				orgID = personal.Id
-			}
+		header := c.GetHeader("X-Org-Id")
+		if header == "" {
+			c.Next()
+			return
 		}
+		orgID, err := strconv.Atoi(header)
 		if err != nil || orgID <= 0 {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "ORG_UNAVAILABLE", "message": "Organization unavailable."})
 			return
@@ -66,11 +64,11 @@ func OrganizationContext() gin.HandlerFunc {
 	}
 }
 
-// Explicit organization endpoints expose teams only. The implicit personal
-// scope remains available to account, wallet and API-key handlers internally.
+// Explicit organization endpoints require a validated team context.
 func RequireTeamOrganization() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		org, ok := c.MustGet("organization").(*model.Organization)
+		raw, _ := c.Get("organization")
+		org, ok := raw.(*model.Organization)
 		if !ok || org.Kind != model.OrganizationTeam {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "ORG_UNAVAILABLE", "message": "Organization unavailable."})
 			return
@@ -86,6 +84,19 @@ func RequireOrgPermission(resource, action string) gin.HandlerFunc {
 			return
 		}
 		c.Next()
+	}
+}
+
+// RequireSelectedOrgPermission checks team permissions on shared account/team
+// routes. UserAuth already authorizes access to the user's own resources.
+func RequireSelectedOrgPermission(resource, action string) gin.HandlerFunc {
+	check := RequireOrgPermission(resource, action)
+	return func(c *gin.Context) {
+		if c.GetInt("org_id") == 0 && c.GetInt("id") > 0 {
+			c.Next()
+			return
+		}
+		check(c)
 	}
 }
 

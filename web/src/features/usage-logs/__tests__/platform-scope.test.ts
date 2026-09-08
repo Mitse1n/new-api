@@ -101,6 +101,20 @@ test('organization-wide logs stay scoped even when the logged-in account is a su
   expect(requests[0].headers['X-Org-Id']).toBe('10')
 })
 
+test('personal mode loads only account logs without an organization context', async () => {
+  useOrganizationStore.getState().select(null)
+  await getAllLogs({})
+  await getLogStats({})
+  expect(new URL(requests[0].url ?? '', 'https://example.test').pathname).toBe(
+    '/api/account/logs'
+  )
+  expect(new URL(requests[1].url ?? '', 'https://example.test').pathname).toBe(
+    '/api/account/logs/stat'
+  )
+  expect(requests[0].headers['X-Org-Id']).toBeUndefined()
+  expect(requests[1].headers['X-Org-Id']).toBeUndefined()
+})
+
 test('personal log view restricts requests to the logged-in user', async () => {
   await getUserLogs({})
   const url = new URL(requests[0].url ?? '', 'https://example.test')

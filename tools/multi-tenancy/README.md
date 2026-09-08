@@ -45,13 +45,9 @@ SQLite 使用 backup API；MySQL 包含触发器、存储程序和事件；Postg
 ```sh
 python3 tools/multi-tenancy/snapshot.py backup --offline --config /secure/source.json --snapshot /secure/pre-tenancy
 python3 tools/multi-tenancy/snapshot.py verify --snapshot /secure/pre-tenancy
-go build -o /secure/multi-tenancy-migrate ./tools/multi-tenancy-migrate
-/secure/multi-tenancy-migrate -offline -action migrate -snapshot /secure/pre-tenancy
-/secure/multi-tenancy-migrate -offline -action migrate -snapshot /secure/pre-tenancy
-/secure/multi-tenancy-migrate -offline -action verify
 ```
 
-迁移工具从 `SQL_DSN`、`LOG_SQL_DSN`、`SQLITE_PATH` 读取应用连接配置，不读取 Python 配置。两者必须指向同一组库。迁移只运行数据库与权限初始化，不接收 HTTP、不启动计费任务。`verify` 不执行 AutoMigrate。
+个人组织及其公共回填命令已移除。正式发布版使用应用正常初始化；私有开发库的一次性转换放在仓库外，不作为公共迁移分发。下方验证夹具只用于可销毁的测试数据库。
 
 回滚时新建空数据库并修改目标配置的 database/path。SQL 数据库需事先创建并授予恢复账号权限；SQLite 文件可以不存在，但父目录必须存在。
 
@@ -63,10 +59,10 @@ python3 tools/multi-tenancy/snapshot.py restore --offline --config /secure/rollb
 
 ## 发布版升级夹具
 
-`released-fixture.go.txt` 是使用真实旧模型生成代表性测试库的源码，禁止用于生产库。验证基线为 `v1.0.0-rc.30`，从仓库根目录执行：
+`released-fixture.go.txt` 是使用真实旧模型生成代表性测试库的源码，禁止用于生产库。验证基线为 `v1.0.0-rc.35`，从仓库根目录执行：
 
 ```sh
-git worktree add --detach /tmp/new-api-release-check v1.0.0-rc.30
+git worktree add --detach /tmp/new-api-release-check v1.0.0-rc.35
 mkdir -p /tmp/new-api-release-check/cmd/tenancy-fixture
 cp tools/multi-tenancy/released-fixture.go.txt /tmp/new-api-release-check/cmd/tenancy-fixture/main.go
 (cd /tmp/new-api-release-check && go build -o /tmp/new-api-release-fixture ./cmd/tenancy-fixture)

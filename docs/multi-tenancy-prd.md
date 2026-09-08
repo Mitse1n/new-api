@@ -1,5 +1,7 @@
 # 多租户（组织采购模型）产品需求文档
 
+> 2026-09-08 更新：本文中的“个人组织”描述已被个人账户作用域替代。个人账户不创建组织或成员关系；团队功能和个人/团队切换体验保持不变。当前实现以 multi-tenancy-implementation.md 为准。
+
 > 文档状态：评审稿 v2
 > 设计依据：`docs/multi-tenancy-design.md`
 > 原型：`docs/multi-tenancy-prototype.svg`

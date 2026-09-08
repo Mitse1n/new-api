@@ -4,7 +4,7 @@ import "github.com/QuantumNous/new-api/model"
 
 // Scope IDs belong to the backend storage model. Resource endpoints already
 // select the account or team via authenticated request context; responses do
-// not expose personal organizations. Keep model JSON intact for Redis caches.
+// not expose internal ownership IDs. Keep model JSON intact for Redis caches.
 type logResponse struct {
 	*model.Log
 	OrgId *int `json:"org_id,omitempty"`

@@ -65,11 +65,11 @@ export function Settings() {
   const { t } = useTranslation()
   const context = useOrganization()
   const settings = useQuery({
-    queryKey: ['organization-settings', context.organization?.id],
+    queryKey: ['organization-settings', context?.organization.id],
     queryFn: getOrganizationSettings,
-    enabled: context.organization !== null,
+    enabled: context !== null,
   })
-  if (context.organization === null) {
+  if (context === null) {
     return (
       <Card>
         <CardHeader>
@@ -187,8 +187,7 @@ function SettingsForm(props: {
   let actionTitle = t('Disable organization')
   if (action === 'delete') actionTitle = t('Delete organization')
   if (action === 'transfer') actionTitle = t('Transfer ownership')
-  const owner =
-    context.membership?.role === 'owner' && context.organization !== null
+  const owner = context?.membership.role === 'owner'
   return (
     <div className='flex flex-col gap-5'>
       <div className='flex justify-end'>

@@ -85,7 +85,7 @@ func createRootAccountIfNeed() error {
 			AccessToken: nil,
 			Quota:       100000000,
 		}
-		return CreateUserWithPersonalOrganization(&rootUser)
+		return DB.Create(&rootUser).Error
 	}
 	return nil
 }
@@ -389,7 +389,7 @@ func migrateDB() error {
 			return err
 		}
 	}
-	return MigratePersonalOrganizations(DB)
+	return DisableInactiveOrganizationTokens(DB)
 }
 
 func migrateLOGDB() error {
@@ -399,7 +399,7 @@ func migrateLOGDB() error {
 	if err := LOG_DB.AutoMigrate(&Log{}); err != nil {
 		return err
 	}
-	return BackfillLogOrganizations(DB, LOG_DB)
+	return nil
 }
 
 func migrateClickHouseLogDB() error {
@@ -408,12 +408,6 @@ func migrateClickHouseLogDB() error {
 		return err
 	}
 	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS org_id Int64 DEFAULT 0").Error; err != nil {
-		return err
-	}
-	if err := BackfillClickHouseLogOrganizations(DB, LOG_DB); err != nil {
-		return err
-	}
-	if err := migrateClickHouseOrganizationOrder(ttlDays); err != nil {
 		return err
 	}
 	return syncClickHouseLogTTL(ttlDays)

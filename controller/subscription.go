@@ -42,15 +42,12 @@ func GetSubscriptionPlans(c *gin.Context) {
 	}
 	result := make([]SubscriptionPlanDTO, 0, len(plans))
 	for _, p := range plans {
-		if orgID := c.GetInt("org_id"); orgID > 0 {
-			org, _, err := model.GetOrganizationMembership(orgID, c.GetInt("id"))
-			if err != nil {
-				organizationError(c, err)
-				return
-			}
-			if p.Audience != "" && p.Audience != "both" && (org.Kind == model.OrganizationPersonal && p.Audience != "personal" || org.Kind == model.OrganizationTeam && p.Audience != "org") {
-				continue
-			}
+		audience := "personal"
+		if c.GetInt("org_id") > 0 {
+			audience = "org"
+		}
+		if p.Audience != "" && p.Audience != "both" && p.Audience != audience {
+			continue
 		}
 		p.NormalizeDefaults()
 		result = append(result, SubscriptionPlanDTO{
@@ -66,7 +63,7 @@ func GetSubscriptionSelf(c *gin.Context) {
 	pref := common.NormalizeBillingPreference(settingMap.BillingPreference)
 
 	var subs []model.UserSubscription
-	if err := model.DB.Scopes(model.OrgScope(c.GetInt("org_id"))).Order("id desc").Find(&subs).Error; err != nil {
+	if err := (model.OrganizationResourceScope{OrgID: c.GetInt("org_id"), UserID: userId, AllMembers: c.GetInt("org_id") > 0}).Apply(model.DB).Order("id desc").Find(&subs).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -133,7 +130,13 @@ func SubscriptionRequestBalancePay(c *gin.Context) {
 		return
 	}
 
-	if err := model.PurchaseOrganizationSubscriptionWithBalance(c.GetInt("org_id"), userId, req.PlanId); err != nil {
+	var err error
+	if orgID := c.GetInt("org_id"); orgID > 0 {
+		err = model.PurchaseOrganizationSubscriptionWithBalance(orgID, userId, req.PlanId)
+	} else {
+		err = model.PurchaseSubscriptionWithBalance(userId, req.PlanId)
+	}
+	if err != nil {
 		common.ApiError(c, err)
 		return
 	}

@@ -11,20 +11,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const userCacheSchemaVersion = 3
+const userCacheSchemaVersion = 4
 
 type UserBase struct {
-	PersonalOrgId int    `json:"-"`
-	Id            int    `json:"id"`
-	Group         string `json:"group"`
-	Email         string `json:"email"`
-	Quota         int    `json:"quota"`
-	Status        int    `json:"status"`
-	Role          int    `json:"role"`
-	Username      string `json:"username"`
-	Setting       string `json:"setting"`
-	AuthVersion   int64  `json:"-"`
-	CacheSchema   int    `json:"-"`
+	Id          int    `json:"id"`
+	Group       string `json:"group"`
+	Email       string `json:"email"`
+	Quota       int    `json:"quota"`
+	Status      int    `json:"status"`
+	Role        int    `json:"role"`
+	Username    string `json:"username"`
+	Setting     string `json:"setting"`
+	AuthVersion int64  `json:"-"`
+	CacheSchema int    `json:"-"`
 }
 
 func (user *UserBase) WriteContext(c *gin.Context) {

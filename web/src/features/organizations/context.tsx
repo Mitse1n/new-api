@@ -37,9 +37,7 @@ export function useHasTeamOrganizations() {
 }
 
 export function useOrganization() {
-  const context = useOrganizationStore((state) => state.context)
-  if (!context) throw new Error('Organization context is not ready')
-  return context
+  return useOrganizationStore((state) => state.context)
 }
 
 export function useSwitchOrganization() {
