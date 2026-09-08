@@ -77,13 +77,6 @@ func GetOrganizationContext(c *gin.Context) {
 		organizationError(c, err)
 		return
 	}
-	if org.Kind == model.OrganizationPersonal {
-		common.ApiSuccess(c, gin.H{"organization": nil, "membership": nil, "pending_transfer": false, "capabilities": gin.H{
-			"platform": authz.Capabilities(c.GetInt("id"), c.GetInt("role")),
-			"org":      authz.OrganizationCapabilities(c.GetInt("id"), org.Id, member.Role),
-		}})
-		return
-	}
 	settings, err := org.EffectiveSettings()
 	if err != nil {
 		organizationError(c, err)

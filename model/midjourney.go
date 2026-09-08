@@ -2,7 +2,6 @@ package model
 
 type Midjourney struct {
 	BillingRequestId string `json:"-" gorm:"type:varchar(64)"`
-	SubscriptionId   int    `json:"-"`
 	OrgId            int    `json:"org_id" gorm:"index:idx_org_midjourney,priority:1"`
 	Id               int    `json:"id"`
 	Code             int    `json:"code"`

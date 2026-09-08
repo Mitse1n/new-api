@@ -42,13 +42,10 @@ func GetSubscriptionPlans(c *gin.Context) {
 	}
 	result := make([]SubscriptionPlanDTO, 0, len(plans))
 	for _, p := range plans {
-		if orgID := c.GetInt("org_id"); orgID > 0 {
-			org, _, err := model.GetOrganizationMembership(orgID, c.GetInt("id"))
-			if err != nil {
-				organizationError(c, err)
-				return
-			}
-			if p.Audience != "" && p.Audience != "both" && (org.Kind == model.OrganizationPersonal && p.Audience != "personal" || org.Kind == model.OrganizationTeam && p.Audience != "org") {
+		// A plan restricted to one audience is offered only to that audience.
+		if p.Audience != "" && p.Audience != "both" {
+			forTeam := c.GetInt("org_id") > 0
+			if forTeam != (p.Audience == "org") {
 				continue
 			}
 		}
@@ -87,17 +84,17 @@ func GetSubscriptionSelf(c *gin.Context) {
 
 	common.ApiSuccess(c, gin.H{
 		"billing_preference": pref,
-		"subscriptions":      subscriptionSummaryResponses(activeSubscriptions), // all active subscriptions
-		"all_subscriptions":  subscriptionSummaryResponses(allSubscriptions),    // all subscriptions including expired
+		"subscriptions":      activeSubscriptions, // all active subscriptions
+		"all_subscriptions":  allSubscriptions,    // all subscriptions including expired
 	})
 }
 
 func UpdateSubscriptionPreference(c *gin.Context) {
-	if raw, exists := c.Get("organization"); exists {
-		if org, ok := raw.(*model.Organization); ok && org.Kind == model.OrganizationTeam {
-			organizationError(c, model.ErrOrganizationInput)
-			return
-		}
+	// The billing preference belongs to a wallet-funded account; a team always
+	// spends its subscription allowance first.
+	if c.GetInt("org_id") > 0 {
+		organizationError(c, model.ErrOrganizationInput)
+		return
 	}
 	userId := c.GetInt("id")
 	var req BillingPreferenceRequest
@@ -428,7 +425,7 @@ func AdminListUserSubscriptions(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, subscriptionSummaryResponses(subs))
+	common.ApiSuccess(c, subs)
 }
 
 type AdminCreateUserSubscriptionRequest struct {

@@ -46,7 +46,7 @@ func TestOrganizationAPIsEnforceScopeAndFreshMembership(t *testing.T) {
 		c.Set("id", id)
 		c.Set("role", common.RoleRootUser)
 		c.Next()
-	}, middleware.OrganizationContext())
+	}, middleware.TeamOrganizationContext())
 	r.GET("/tokens", middleware.RequireOrgPermission("org.token", "read"), GetAllTokens)
 	r.GET("/tokens/:id", middleware.RequireOrgPermission("org.token", "read"), GetToken)
 	r.PUT("/tokens", middleware.RequireOrgPermission("org.token", "write"), UpdateToken)

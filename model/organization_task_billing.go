@@ -66,7 +66,7 @@ func RefundOrganizationMidjourneyQuota(task *Midjourney) (int, error) {
 		if requestID == "" {
 			requestID = fmt.Sprintf("migrated-mj:%d", current.Id)
 		}
-		if err := adjustOrganizationAssetQuotaTx(tx, &org, current.UserId, current.TokenId, requestID, current.SubscriptionId, current.Quota, 0); err != nil {
+		if err := adjustOrganizationAssetQuotaTx(tx, &org, current.UserId, current.TokenId, requestID, 0, current.Quota, 0); err != nil {
 			return err
 		}
 		return tx.Model(&current).Update("quota", 0).Error

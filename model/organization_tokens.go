@@ -49,7 +49,17 @@ type OrganizationResourceScope struct {
 	AllMembers bool
 }
 
+// Apply serves both scopes a request can have: a positive OrgID restricts the
+// query to that team, while exactly zero means the caller's own resources,
+// which never belong to a team. Any other value is malformed and matches
+// nothing, so a negative organization can never widen into the caller's scope.
 func (scope OrganizationResourceScope) Apply(db *gorm.DB) *gorm.DB {
+	if scope.OrgID < 0 || scope.UserID <= 0 && !scope.AllMembers {
+		return db.Where("1 = 0")
+	}
+	if scope.OrgID == 0 {
+		return db.Where("org_id = 0 AND user_id = ?", scope.UserID)
+	}
 	db = db.Scopes(OrgScope(scope.OrgID))
 	if !scope.AllMembers {
 		db = db.Where("user_id = ?", scope.UserID)
@@ -58,12 +68,19 @@ func (scope OrganizationResourceScope) Apply(db *gorm.DB) *gorm.DB {
 }
 
 // OrganizationTokenScope always binds a key to its creator, regardless of role.
+// A zero OrgID selects the caller's own keys, which carry no organization.
 type OrganizationTokenScope struct {
 	OrgID  int
 	UserID int
 }
 
 func (scope OrganizationTokenScope) Apply(db *gorm.DB) *gorm.DB {
+	if scope.UserID <= 0 || scope.OrgID < 0 {
+		return db.Where("1 = 0")
+	}
+	if scope.OrgID == 0 {
+		return db.Where("org_id = 0 AND user_id = ?", scope.UserID)
+	}
 	return db.Scopes(OrgScope(scope.OrgID)).Where("user_id = ?", scope.UserID)
 }
 
@@ -189,27 +206,4 @@ func disableOrganizationTokensTx(tx *gorm.DB, tokens []Token) error {
 		ids = append(ids, token.Id)
 	}
 	return tx.Model(&Token{}).Where("id IN ?", ids).Update("status", common.TokenStatusDisabled).Error
-}
-
-// Startup reconciles keys left usable by the previous organization-asset policy.
-// Writes are quiesced; the cache namespace changes with this migration.
-func DisableInactiveOrganizationTokens(db *gorm.DB) error {
-	for {
-		done := false
-		err := db.Transaction(func(tx *gorm.DB) error {
-			active := tx.Model(&OrganizationMember{}).Select("1").Where("organization_members.org_id = tokens.org_id AND organization_members.user_id = tokens.user_id AND organization_members.status = ?", OrganizationActive)
-			var tokens []Token
-			if err := tx.Where("org_id > 0 AND status <> ? AND NOT EXISTS (?)", common.TokenStatusDisabled, active).Order("id").Limit(250).Select("id", "key").Find(&tokens).Error; err != nil {
-				return err
-			}
-			done = len(tokens) == 0
-			return disableOrganizationTokensTx(tx, tokens)
-		})
-		if err != nil {
-			return err
-		}
-		if done {
-			return nil
-		}
-	}
 }

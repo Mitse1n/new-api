@@ -266,7 +266,7 @@ func TokenOrUserAuth() func(c *gin.Context) {
 				return
 			}
 			setDashboardAuthContext(c, user, identity, false)
-			OrganizationContext()(c)
+			TeamOrganizationContext()(c)
 			return
 		}
 		// Opaque credentials are relay API keys here, never dashboard PATs.
