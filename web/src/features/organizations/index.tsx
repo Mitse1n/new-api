@@ -27,14 +27,12 @@ import { Members } from './components/Members'
 import { Audit, PlansAndOrders } from './components/Orders'
 import { OrganizationSummary } from './components/OrganizationSummary'
 import { Settings } from './components/Settings'
-import { useTeamContext } from './context'
+import { useOrganization } from './context'
 
 export function OrganizationPage(props: { section: string }) {
   const { t } = useTranslation()
-  // Without a team only the settings section is reachable, where it offers the
-  // create-a-team form.
-  const team = useTeamContext()
-  if (team === null && props.section !== 'settings') {
+  const context = useOrganization()
+  if (context.organization === null && props.section !== 'settings') {
     return (
       <Navigate to='/dashboard/$section' params={{ section: 'overview' }} />
     )
@@ -50,17 +48,18 @@ export function OrganizationPage(props: { section: string }) {
     case 'plans':
       title = t('Plans & orders')
       content = <PlansAndOrders />
-      permitted = team?.capabilities.org['org.subscription']?.purchase === true
+      permitted =
+        context.capabilities.org['org.subscription']?.purchase === true
       break
     case 'settings':
       title = t('Organization settings')
       content = <Settings />
-      permitted = team === null || team.capabilities.org['org.settings']?.write === true
+      permitted = context.capabilities.org['org.settings']?.write === true
       break
     case 'audit':
       title = t('Organization audit')
       content = <Audit />
-      permitted = team?.capabilities.org['org.usage']?.read_all === true
+      permitted = context.capabilities.org['org.usage']?.read_all === true
       break
     case 'members':
       break
@@ -77,7 +76,7 @@ export function OrganizationPage(props: { section: string }) {
       <SectionPageLayout.Title>{title}</SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='flex flex-col gap-5 px-4 pb-6'>
-          {team !== null && <OrganizationSummary />}
+          {context.organization !== null && <OrganizationSummary />}
           {permitted ? (
             content
           ) : (

@@ -28,8 +28,7 @@ import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useSummaryCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import type { QuotaDataItem } from '@/features/dashboard/types'
 import { getOrganizationSummary } from '@/features/organizations/api'
-import { useTeamContext } from '@/features/organizations/context'
-import { useAuthStore } from '@/stores/auth-store'
+import { useOrganization } from '@/features/organizations/context'
 import { useStatus } from '@/hooks/use-status'
 import { getCurrencyLabel, isCurrencyDisplayEnabled } from '@/lib/currency'
 import { formatNumber, formatQuota } from '@/lib/format'
@@ -140,27 +139,17 @@ const HEALTH_CONFIG: Record<
 
 export function SummaryCards() {
   const { t } = useTranslation()
-  const user = useAuthStore((state) => state.auth.user)
   const { status, loading } = useStatus()
 
   const summaryTimeRange = useMemo(() => computeTimeRange(1), [])
-  // Inside a team these figures are the team's shared wallet; otherwise they
-  // are the account's own, which the session already carries.
-  const team = useTeamContext()
-  const teamSummary = useQuery({
-    queryKey: ['organization-summary', team?.organization.id],
+  const organization = useOrganization()
+  const orgSummary = useQuery({
+    queryKey: ['organization-summary', organization.organization?.id],
     queryFn: getOrganizationSummary,
-    enabled: !!team,
   })
-  const remainQuota = Number(
-    (team ? teamSummary.data?.available_quota : user?.quota) ?? 0
-  )
-  const usedQuota = Number(
-    (team ? teamSummary.data?.used_quota : user?.used_quota) ?? 0
-  )
-  const requestCount = Number(
-    (team ? teamSummary.data?.request_count : user?.request_count) ?? 0
-  )
+  const remainQuota = Number(orgSummary.data?.available_quota ?? 0)
+  const usedQuota = Number(orgSummary.data?.used_quota ?? 0)
+  const requestCount = Number(orgSummary.data?.request_count ?? 0)
 
   const usageTrendQuery = useQuery({
     queryKey: [

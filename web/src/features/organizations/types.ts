@@ -49,8 +49,8 @@ export type OrganizationMember = {
 export type OrganizationContext = {
   logo?: string
   pending_transfer: boolean
-  organization: Organization
-  membership: OrganizationMember
+  organization: Organization | null
+  membership: OrganizationMember | null
   capabilities: {
     platform: Record<string, Record<string, boolean>>
     org: Record<string, Record<string, boolean>>

@@ -63,7 +63,7 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { useTeamContext } from '@/features/organizations/context'
+import { useOrganization } from '@/features/organizations/context'
 import { useStatus } from '@/hooks/use-status'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
@@ -106,7 +106,7 @@ export function ApiKeysMutateDrawer({
   const isUpdate = !!currentRow
   const currentRowId = currentRow?.id
   const { triggerRefresh, setCreatedSecrets } = useApiKeys()
-  const team = useTeamContext()
+  const organization = useOrganization()
   const { status, loading: statusLoading } = useStatus()
   const [pendingCreate, setPendingCreate] = useState<ApiKeyFormValues | null>(
     null
@@ -397,8 +397,10 @@ export function ApiKeysMutateDrawer({
             {isUpdate ? t('Update API Key') : t('Create API Key')}
           </SheetTitle>
           <SheetDescription>
-            {team
-              ? t('Organization: {{name}}', { name: team.organization.name })
+            {organization.organization
+              ? t('Organization: {{name}}', {
+                  name: organization.organization.name,
+                })
               : t('Personal')}
             {' · '}
             {isUpdate
@@ -801,11 +803,13 @@ export function ApiKeysMutateDrawer({
           }}
           title={t('Create API Key')}
           desc={
-            team === null
-              ? t('Create an API key for yourself using your own balance?')
+            organization.organization === null
+              ? t('Create an API key for yourself using your personal balance?')
               : t(
                   'You manage this API key. Usage will be deducted from {{name}} quota.',
-                  { name: team.organization.name }
+                  {
+                    name: organization.organization.name,
+                  }
                 )
           }
           confirmText={t('Create API Key')}

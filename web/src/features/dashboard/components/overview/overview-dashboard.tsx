@@ -50,7 +50,7 @@ import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
 import type { ApiKey } from '@/features/keys/types'
 import { getOrganizationSummary } from '@/features/organizations/api'
-import { useTeamContext } from '@/features/organizations/context'
+import { useOrganization } from '@/features/organizations/context'
 import { usePlatformView } from '@/features/organizations/platform-view'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { getUserModels } from '@/lib/api'
@@ -472,23 +472,14 @@ export function OverviewDashboard() {
     boolean | null
   >(() => getSavedSetupGuideExpanded())
 
-  // Inside a team these figures are the team's shared wallet; otherwise they
-  // are the account's own, which the session already carries.
-  const team = useTeamContext()
-  const teamSummary = useQuery({
-    queryKey: ['organization-summary', team?.organization.id],
+  const organization = useOrganization()
+  const orgSummary = useQuery({
+    queryKey: ['organization-summary', organization.organization?.id],
     queryFn: getOrganizationSummary,
-    enabled: !!team,
   })
-  const requestCount = Number(
-    (team ? teamSummary.data?.request_count : user?.request_count) ?? 0
-  )
-  const remainQuota = Number(
-    (team ? teamSummary.data?.available_quota : user?.quota) ?? 0
-  )
-  const usedQuota = Number(
-    (team ? teamSummary.data?.used_quota : user?.used_quota) ?? 0
-  )
+  const requestCount = Number(orgSummary.data?.request_count ?? 0)
+  const remainQuota = Number(orgSummary.data?.available_quota ?? 0)
+  const usedQuota = Number(orgSummary.data?.used_quota ?? 0)
   const platform = usePlatformView()
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN) && platform
 

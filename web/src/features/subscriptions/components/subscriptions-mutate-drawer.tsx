@@ -493,10 +493,10 @@ export function SubscriptionsMutateDrawer({
                         <SelectContent>
                           <SelectGroup>
                             <SelectItem value='both'>
-                              {t('Everyone')}
+                              {t('Personal and team organizations')}
                             </SelectItem>
                             <SelectItem value='personal'>
-                              {t('Individual accounts')}
+                              {t('Personal')}
                             </SelectItem>
                             <SelectItem value='org'>
                               {t('Team organizations')}

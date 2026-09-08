@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Navigate, createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 
-import { useTeamContext } from '@/features/organizations/context'
+import { useOrganization } from '@/features/organizations/context'
 import { Wallet } from '@/features/wallet'
 
 const walletSearchSchema = z.object({
@@ -33,10 +33,8 @@ export const Route = createFileRoute('/_authenticated/wallet/')({
 
 function RouteComponent() {
   const { show_history } = Route.useSearch()
-  const team = useTeamContext()
-  // A team member without billing read has no wallet page; an account acting
-  // for itself always does.
-  if (team && !team.capabilities.org['org.billing']?.read) {
+  const context = useOrganization()
+  if (!context.capabilities.org['org.billing']?.read) {
     return (
       <Navigate to='/organization/$section' params={{ section: 'billing' }} />
     )

@@ -52,8 +52,6 @@ export function OrganizationBoundary(props: { children: ReactNode }) {
       useOrganizationStore.getState().select(null)
     }
   }, [organizations.data, activeOrgID])
-  // Only a team has a context to load. An account acting for itself renders
-  // immediately, so the whole app no longer waits on an organization request.
   const selection = useQuery({
     queryKey: ['organization-context', userID, activeOrgID, epoch],
     queryFn: getOrganizationContext,
@@ -61,10 +59,10 @@ export function OrganizationBoundary(props: { children: ReactNode }) {
       !!userID &&
       boundUserID === userID &&
       organizations.isSuccess &&
-      activeOrgID !== null &&
-      organizations.data.some(
-        (org) => org.id === activeOrgID && org.status === 1
-      ),
+      (activeOrgID === null ||
+        organizations.data.some(
+          (org) => org.id === activeOrgID && org.status === 1
+        )),
     staleTime: 0,
     retry: false,
   })
@@ -73,11 +71,11 @@ export function OrganizationBoundary(props: { children: ReactNode }) {
       useOrganizationStore.getState().setContext(selection.data, epoch)
     }
   }, [selection.data, epoch])
-  const ready =
-    activeOrgID === null
-      ? organizations.isSuccess
-      : !!context && context.organization?.id === activeOrgID
-  if (userID !== boundUserID || !ready) {
+  if (
+    userID !== boundUserID ||
+    !context ||
+    (context.organization?.id ?? null) !== activeOrgID
+  ) {
     const failed = organizations.isError || selection.isError
     return (
       <div

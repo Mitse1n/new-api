@@ -37,20 +37,19 @@ import type {
 // Generic API Helpers
 // ============================================================================
 
-// Inside a team, logs come from the organization endpoint; otherwise the
-// existing self endpoints already scope to the caller.
 function buildApiPath(
   endpoint: string,
   isAdmin: boolean,
   platform: boolean
 ): string {
-  if (platform) {
-    return isAdmin ? endpoint : `${endpoint}/self`
+  const state = useOrganizationStore.getState()
+  if (state.context && !platform) {
+    if (endpoint === '/api/log') {
+      return state.context.organization ? '/api/org/logs' : '/api/account/logs'
+    }
+    return `${endpoint}/self`
   }
-  if (endpoint === '/api/log' && useOrganizationStore.getState().context) {
-    return '/api/org/logs'
-  }
-  return `${endpoint}/self`
+  return isAdmin ? endpoint : `${endpoint}/self`
 }
 
 async function fetchLogs<T>(

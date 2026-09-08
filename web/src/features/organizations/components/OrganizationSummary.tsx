@@ -29,12 +29,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 
 import { getOrganizationSummary, organizationMutation } from '../api'
-import { useTeamContext } from '../context'
+import { useOrganization } from '../context'
 import { usePlatformView } from '../platform-view'
 
 export function OrganizationSummary() {
   const { t } = useTranslation()
-  const team = useTeamContext()
+  const context = useOrganization()
   const client = useQueryClient()
   const [confirmTransfer, setConfirmTransfer] = useState(false)
   const accept = useMutation({
@@ -47,9 +47,9 @@ export function OrganizationSummary() {
   })
   const platform = usePlatformView()
   const summary = useQuery({
-    queryKey: ['organization-summary', team?.organization.id],
+    queryKey: ['organization-summary', context.organization?.id],
     queryFn: getOrganizationSummary,
-    enabled: !platform && team !== null,
+    enabled: !platform && context.organization !== null,
   })
   if (platform) {
     return (
@@ -59,7 +59,7 @@ export function OrganizationSummary() {
       </div>
     )
   }
-  if (team === null) return null
+  if (context.organization === null) return null
   const data = summary.data
   const roleLabels = {
     owner: t('Owner'),
@@ -73,9 +73,9 @@ export function OrganizationSummary() {
     <div className='bg-card flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl border px-5 py-4 shadow-xs'>
       <div className='flex min-w-0 items-center gap-3'>
         <span className='bg-primary/10 text-primary rounded-xl p-2'>
-          {team.logo ? (
+          {context.logo ? (
             <img
-              src={team.logo}
+              src={context.logo}
               alt=''
               className='size-5 rounded object-contain'
             />
@@ -85,13 +85,13 @@ export function OrganizationSummary() {
         </span>
         <div className='min-w-0'>
           <div className='flex items-center gap-2'>
-            <strong className='truncate'>{team.organization.name}</strong>
+            <strong className='truncate'>{context.organization.name}</strong>
             <Badge variant='secondary'>
-              {roleLabels[team.membership.role]}
+              {context.membership ? roleLabels[context.membership.role] : ''}
             </Badge>
           </div>
           <span className='text-muted-foreground text-xs'>
-            {team.organization.slug} · {t('Organization usage')}
+            {context.organization.slug} · {t('Organization usage')}
           </span>
         </div>
       </div>
@@ -101,7 +101,7 @@ export function OrganizationSummary() {
           {data ? remainingLabel : <Skeleton className='h-5 w-20' />}
         </strong>
       </div>
-      {team.capabilities.org['org.billing']?.read === true && (
+      {context.capabilities.org['org.billing']?.read === true && (
         <div className='text-muted-foreground text-xs'>
           {t('Organization wallet')}
           <strong className='text-foreground mt-1 block text-base'>
@@ -113,7 +113,7 @@ export function OrganizationSummary() {
           </strong>
         </div>
       )}
-      {team.pending_transfer && (
+      {context.pending_transfer && (
         <>
           <Button variant='outline' onClick={() => setConfirmTransfer(true)}>
             {t('Accept ownership')}
@@ -127,7 +127,7 @@ export function OrganizationSummary() {
             <p>
               {t(
                 'You will become the owner of {{name}}. The current owner will become an administrator.',
-                { name: team.organization.name }
+                { name: context.organization.name }
               )}
             </p>
             <Button disabled={accept.isPending} onClick={() => accept.mutate()}>

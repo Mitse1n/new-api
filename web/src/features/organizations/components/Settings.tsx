@@ -57,23 +57,19 @@ import {
   organizationMutation,
   updateOrganizationSettings,
 } from '../api'
-import {
-  useOrganization,
-  useSwitchOrganization,
-  useTeamContext,
-} from '../context'
+import { useOrganization, useSwitchOrganization } from '../context'
 import type { Organization, OrganizationSettingsResponse } from '../types'
 import { CreateOrganization } from './CreateOrganization'
 
 export function Settings() {
   const { t } = useTranslation()
-  const team = useTeamContext()
+  const context = useOrganization()
   const settings = useQuery({
-    queryKey: ['organization-settings', team?.organization.id],
+    queryKey: ['organization-settings', context.organization?.id],
     queryFn: getOrganizationSettings,
-    enabled: team !== null,
+    enabled: context.organization !== null,
   })
-  if (team === null) {
+  if (context.organization === null) {
     return (
       <Card>
         <CardHeader>
@@ -97,7 +93,9 @@ export function Settings() {
       </p>
     )
   }
-  return <SettingsForm initial={settings.data} organization={team.organization} />
+  return (
+    <SettingsForm initial={settings.data} organization={context.organization} />
+  )
 }
 
 function SettingsForm(props: {
@@ -190,7 +188,7 @@ function SettingsForm(props: {
   if (action === 'delete') actionTitle = t('Delete organization')
   if (action === 'transfer') actionTitle = t('Transfer ownership')
   const owner =
-    context.membership.role === 'owner'
+    context.membership?.role === 'owner' && context.organization !== null
   return (
     <div className='flex flex-col gap-5'>
       <div className='flex justify-end'>

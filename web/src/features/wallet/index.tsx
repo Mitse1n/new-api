@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { getOrganizationSummary } from '@/features/organizations/api'
 import { OrganizationSummary } from '@/features/organizations/components/OrganizationSummary'
-import { useTeamContext } from '@/features/organizations/context'
+import { useOrganization } from '@/features/organizations/context'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
@@ -64,22 +64,20 @@ interface WalletProps {
 
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
-  const team = useTeamContext()
-  // Paying for a team requires a billing role; paying for your own account
-  // never does.
-  if (team && !team.capabilities.org['org.billing']?.write) {
+  const context = useOrganization()
+  if (!context.capabilities.org['org.billing']?.write) {
     return (
       <div className='p-5'>
         {t('Only organization owners and administrators can manage payments.')}
       </div>
     )
   }
-  return <WalletContent {...props} />
+  return <OrganizationWallet {...props} />
 }
 
-function WalletContent(props: WalletProps) {
+function OrganizationWallet(props: WalletProps) {
   const { t } = useTranslation()
-  const team = useTeamContext()
+  const context = useOrganization()
   const [user, setUser] = useState<UserWalletData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [topupAmount, setTopupAmount] = useState(0)
@@ -132,20 +130,16 @@ function WalletContent(props: WalletProps) {
   const fetchUser = useCallback(async () => {
     try {
       setUserLoading(true)
-      // A team spends its shared wallet, so its balance replaces the
-      // account's own figures while a team is selected.
       const [response, summary] = await Promise.all([
         getSelf(),
-        team ? getOrganizationSummary() : Promise.resolve(null),
+        getOrganizationSummary(),
       ])
       if (response.success && response.data) {
         setUser({
           ...response.data,
-          ...(summary && {
-            quota: summary.quota,
-            used_quota: summary.used_quota,
-            group: summary.group,
-          }),
+          quota: summary.quota,
+          used_quota: summary.used_quota,
+          group: summary.group,
         } as UserWalletData)
       }
     } catch (error) {
@@ -154,7 +148,7 @@ function WalletContent(props: WalletProps) {
     } finally {
       setUserLoading(false)
     }
-  }, [team])
+  }, [])
 
   useEffect(() => {
     fetchUser()
@@ -371,7 +365,7 @@ function WalletContent(props: WalletProps) {
               />
             </div>
 
-            {team === null && (
+            {context.organization === null && (
               <AffiliateRewardsCard
                 user={user}
                 affiliateLink={affiliateLink}

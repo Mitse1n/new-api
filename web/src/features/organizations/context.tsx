@@ -36,17 +36,10 @@ export function useHasTeamOrganizations() {
   return organizations.data ?? false
 }
 
-// useOrganization is for the team views, which only render once a team is
-// selected. Anything reachable without a team must use useTeamContext, whose
-// null result means the account is acting for itself.
 export function useOrganization() {
   const context = useOrganizationStore((state) => state.context)
   if (!context) throw new Error('Organization context is not ready')
   return context
-}
-
-export function useTeamContext() {
-  return useOrganizationStore((state) => state.context)
 }
 
 export function useSwitchOrganization() {
