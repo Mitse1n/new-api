@@ -550,29 +550,35 @@ func (user *User) TransferAffQuotaToQuota(quota int) error {
 		return fmt.Errorf("转移额度最小为%s！", logger.LogQuota(common.QuotaFromFloat(common.QuotaPerUnit)))
 	}
 
-	if err := common.ValidateWalletQuota(quota); err != nil {
-		return err
+	// 开始数据库事务
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
 	}
-	err := DB.Transaction(func(tx *gorm.DB) error {
-		var current User
-		if err := lockForUpdate(tx).Where("id = ?", user.Id).First(&current).Error; err != nil {
-			return err
-		}
-		if current.AffQuota < quota {
-			return errors.New("邀请额度不足！")
-		}
-		if err := creditTopUpQuota(tx, user.Id, quota, nil); err != nil {
-			return err
-		}
-		return tx.Model(&current).Update("aff_quota", gorm.Expr("aff_quota - ?", quota)).Error
-	})
+	defer tx.Rollback() // 确保在函数退出时事务能回滚
+
+	// 加锁查询用户以确保数据一致性
+	err := lockForUpdate(tx).First(user, user.Id).Error
 	if err != nil {
 		return err
 	}
-	if err := invalidateUserCache(user.Id); err != nil {
-		common.SysError("invalidate affiliate wallet cache: " + err.Error())
+
+	// 再次检查用户的AffQuota是否足够
+	if user.AffQuota < quota {
+		return errors.New("邀请额度不足！")
 	}
-	return nil
+
+	// 更新用户额度
+	user.AffQuota -= quota
+	user.Quota += quota
+
+	// 保存用户状态
+	if err := tx.Save(user).Error; err != nil {
+		return err
+	}
+
+	// 提交事务
+	return tx.Commit().Error
 }
 
 func (user *User) prepareForInsert(tx *gorm.DB) error {
