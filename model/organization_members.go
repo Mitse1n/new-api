@@ -162,21 +162,11 @@ func AcceptOrganizationInvite(userID, inviteID int) (int, error) {
 			acceptedOrgID = invite.OrgId
 			return nil
 		}
-		// Only one pending transition wins. Membership failures roll this back.
-		result := tx.Model(&OrganizationInvite{}).
-			Where("id = ? AND invitee_id = ? AND status = ? AND expires_at > ?", inviteID, userID, "pending", common.GetTimestamp()).
-			Updates(map[string]interface{}{"status": "accepted", "accepted_by": userID})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
+		if invite.Status != "pending" || invite.ExpiresAt <= common.GetTimestamp() {
 			return ErrOrganizationInvite
 		}
 		var user User
 		if err := tx.Where("id = ? AND status = ?", userID, common.UserStatusEnabled).First(&user).Error; err != nil {
-			return ErrOrganizationInvite
-		}
-		if user.Id != invite.InviteeId {
 			return ErrOrganizationInvite
 		}
 		var member OrganizationMember
@@ -207,6 +197,9 @@ func AcceptOrganizationInvite(userID, inviteID int) (int, error) {
 		}
 		member.OrgId, member.UserId, member.Role, member.Status = org.Id, userID, invite.Role, OrganizationActive
 		if err := tx.Save(&member).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&invite).Updates(map[string]interface{}{"status": "accepted", "accepted_by": userID}).Error; err != nil {
 			return err
 		}
 		acceptedOrgID = org.Id

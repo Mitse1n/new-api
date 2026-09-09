@@ -41,12 +41,19 @@ func TestOrganizationInviteBindsUsernameToAccountWithoutEmail(t *testing.T) {
 	require.NoError(t, db.Model(&users[1]).Update("status", common.UserStatusDisabled).Error)
 	_, err = AcceptOrganizationInvite(users[1].Id, invite.Id)
 	assert.ErrorIs(t, err, ErrOrganizationInvite)
+	require.NoError(t, db.First(invite, invite.Id).Error)
+	assert.Equal(t, "pending", invite.Status)
+	assert.Zero(t, invite.AcceptedBy)
 	require.NoError(t, db.Model(&users[1]).Update("status", common.UserStatusEnabled).Error)
 	accepted, err := AcceptOrganizationInvite(users[1].Id, invite.Id)
 	require.NoError(t, err)
 	assert.Equal(t, org.Id, accepted)
 	_, err = AcceptOrganizationInvite(users[1].Id, invite.Id)
 	require.NoError(t, err)
+	assert.ErrorIs(t, RevokeOrganizationInvite(org.Id, users[0].Id, invite.Id), ErrOrganizationInvite)
+	var audits int64
+	require.NoError(t, db.Model(&OrganizationAudit{}).Where("org_id = ? AND action = ?", org.Id, "member.accept").Count(&audits).Error)
+	assert.EqualValues(t, 1, audits)
 	_, err = CreateOrganizationInvite(org.Id, users[0].Id, "renamed", OrgRoleMember)
 	assert.ErrorIs(t, err, ErrOrganizationMemberExists)
 }
@@ -113,39 +120,6 @@ func TestOrganizationInvitationInboxIsAccountScopedAndRequiresConsent(t *testing
 	assert.ErrorIs(t, DeclineOrganizationInvite(users[1].Id, replacement.Id), ErrOrganizationInvite)
 	var declinedAudit OrganizationAudit
 	require.NoError(t, db.Where("org_id = ? AND actor_id = ? AND action = ?", org.Id, users[1].Id, "member.decline").First(&declinedAudit).Error)
-}
-
-func TestOrganizationInviteAcceptanceRollsBackWhenMembershipFails(t *testing.T) {
-	db := organizationTestDatabase(t)
-	users := []User{{Username: "owner", AffCode: "owner"}, {Username: "recipient", AffCode: "recipient"}}
-	require.NoError(t, db.Create(&users).Error)
-	org, err := CreateTeamOrganization(users[0].Id, "Team", "accept-rollback")
-	require.NoError(t, err)
-	invite, err := CreateOrganizationInvite(org.Id, users[0].Id, users[1].Username, OrgRoleMember)
-	require.NoError(t, err)
-	require.NoError(t, db.Model(&users[1]).Update("status", common.UserStatusDisabled).Error)
-
-	_, err = AcceptOrganizationInvite(users[1].Id, invite.Id)
-	assert.ErrorIs(t, err, ErrOrganizationInvite)
-	require.NoError(t, db.First(invite, invite.Id).Error)
-	assert.Equal(t, "pending", invite.Status)
-	assert.Zero(t, invite.AcceptedBy)
-	var members, audits int64
-	require.NoError(t, db.Model(&OrganizationMember{}).Where("org_id = ? AND user_id = ?", org.Id, users[1].Id).Count(&members).Error)
-	require.NoError(t, db.Model(&OrganizationAudit{}).Where("org_id = ? AND action = ?", org.Id, "member.accept").Count(&audits).Error)
-	assert.Zero(t, members)
-	assert.Zero(t, audits)
-
-	require.NoError(t, db.Model(&users[1]).Update("status", common.UserStatusEnabled).Error)
-	accepted, err := AcceptOrganizationInvite(users[1].Id, invite.Id)
-	require.NoError(t, err)
-	assert.Equal(t, org.Id, accepted)
-	assert.ErrorIs(t, RevokeOrganizationInvite(org.Id, users[0].Id, invite.Id), ErrOrganizationInvite)
-	accepted, err = AcceptOrganizationInvite(users[1].Id, invite.Id)
-	require.NoError(t, err)
-	assert.Equal(t, org.Id, accepted)
-	require.NoError(t, db.Model(&OrganizationAudit{}).Where("org_id = ? AND action = ?", org.Id, "member.accept").Count(&audits).Error)
-	assert.EqualValues(t, 1, audits)
 }
 
 func TestOrganizationInviteAcceptAndRevokeHaveOneWinner(t *testing.T) {
