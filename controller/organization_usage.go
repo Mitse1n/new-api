@@ -32,7 +32,7 @@ func GetOrganizationLogs(c *gin.Context) {
 	}
 	model.FormatOrganizationLogs(logs)
 	page.SetTotal(int(total))
-	page.SetItems(logResponses(logs))
+	page.SetItems(logs)
 	common.ApiSuccess(c, page)
 }
 

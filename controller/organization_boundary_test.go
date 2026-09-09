@@ -169,7 +169,7 @@ func TestResourceResponsesKeepStorageScopePrivate(t *testing.T) {
 	token := &model.Token{OrgId: 71, Key: "private", Name: "test"}
 	for _, response := range []any{
 		buildMaskedTokenResponse(token),
-		logResponses([]*model.Log{{OrgId: 71, Quota: 12}}),
+		[]*model.Log{{OrgId: 71, Quota: 12}},
 		topUpResponses([]*model.TopUp{{OrgId: 71, Money: 2}}),
 		midjourneyResponses([]*model.Midjourney{{OrgId: 71}}),
 		quotaDataResponses([]*model.QuotaData{{OrgId: 71}}),

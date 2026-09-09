@@ -33,7 +33,7 @@ func GetAllLogs(c *gin.Context) {
 		model.FormatRootLogs(logs)
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(logResponses(logs))
+	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
 	return
 }
@@ -55,7 +55,7 @@ func GetUserLogs(c *gin.Context) {
 		return
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(logResponses(logs))
+	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
 	return
 }
@@ -96,7 +96,7 @@ func GetLogByKey(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"success": true,
 		"message": "",
-		"data":    logResponses(logs),
+		"data":    logs,
 	})
 }
 
