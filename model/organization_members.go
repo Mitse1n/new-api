@@ -142,18 +142,19 @@ func AcceptOrganizationInvite(userID, inviteID int) (int, error) {
 	if inviteID <= 0 {
 		return 0, ErrOrganizationInvite
 	}
+	// Resolve the organization before starting the transaction so MySQL's
+	// membership and seat reads take their snapshot after the organization lock.
+	var invite OrganizationInvite
+	if err := DB.Where("id = ? AND invitee_id = ?", inviteID, userID).First(&invite).Error; err != nil {
+		return 0, ErrOrganizationInvite
+	}
 	var acceptedOrgID int
 	err := DB.Transaction(func(tx *gorm.DB) error {
-		var invite OrganizationInvite
-		if err := tx.Where("id = ? AND invitee_id = ?", inviteID, userID).First(&invite).Error; err != nil {
-			return ErrOrganizationInvite
-		}
 		var org Organization
 		if err := lockForUpdate(tx).Where("id = ? AND status = ?", invite.OrgId, OrganizationActive).First(&org).Error; err != nil {
 			return ErrOrganizationInvite
 		}
-		// Reload after acquiring the organization lock to serialize acceptance,
-		// revocation and concurrent invitations.
+		// Keep membership, seats and organization status consistent with governance.
 		if err := tx.First(&invite, invite.Id).Error; err != nil {
 			return err
 		}
@@ -161,7 +162,14 @@ func AcceptOrganizationInvite(userID, inviteID int) (int, error) {
 			acceptedOrgID = invite.OrgId
 			return nil
 		}
-		if invite.Status != "pending" || invite.ExpiresAt <= common.GetTimestamp() {
+		// Only one pending transition wins. Membership failures roll this back.
+		result := tx.Model(&OrganizationInvite{}).
+			Where("id = ? AND invitee_id = ? AND status = ? AND expires_at > ?", inviteID, userID, "pending", common.GetTimestamp()).
+			Updates(map[string]interface{}{"status": "accepted", "accepted_by": userID})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
 			return ErrOrganizationInvite
 		}
 		var user User
@@ -199,9 +207,6 @@ func AcceptOrganizationInvite(userID, inviteID int) (int, error) {
 		}
 		member.OrgId, member.UserId, member.Role, member.Status = org.Id, userID, invite.Role, OrganizationActive
 		if err := tx.Save(&member).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&invite).Updates(map[string]interface{}{"status": "accepted", "accepted_by": userID}).Error; err != nil {
 			return err
 		}
 		acceptedOrgID = org.Id

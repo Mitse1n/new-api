@@ -114,3 +114,88 @@ func TestOrganizationInvitationInboxIsAccountScopedAndRequiresConsent(t *testing
 	var declinedAudit OrganizationAudit
 	require.NoError(t, db.Where("org_id = ? AND actor_id = ? AND action = ?", org.Id, users[1].Id, "member.decline").First(&declinedAudit).Error)
 }
+
+func TestOrganizationInviteAcceptanceRollsBackWhenMembershipFails(t *testing.T) {
+	db := organizationTestDatabase(t)
+	users := []User{{Username: "owner", AffCode: "owner"}, {Username: "recipient", AffCode: "recipient"}}
+	require.NoError(t, db.Create(&users).Error)
+	org, err := CreateTeamOrganization(users[0].Id, "Team", "accept-rollback")
+	require.NoError(t, err)
+	invite, err := CreateOrganizationInvite(org.Id, users[0].Id, users[1].Username, OrgRoleMember)
+	require.NoError(t, err)
+	require.NoError(t, db.Model(&users[1]).Update("status", common.UserStatusDisabled).Error)
+
+	_, err = AcceptOrganizationInvite(users[1].Id, invite.Id)
+	assert.ErrorIs(t, err, ErrOrganizationInvite)
+	require.NoError(t, db.First(invite, invite.Id).Error)
+	assert.Equal(t, "pending", invite.Status)
+	assert.Zero(t, invite.AcceptedBy)
+	var members, audits int64
+	require.NoError(t, db.Model(&OrganizationMember{}).Where("org_id = ? AND user_id = ?", org.Id, users[1].Id).Count(&members).Error)
+	require.NoError(t, db.Model(&OrganizationAudit{}).Where("org_id = ? AND action = ?", org.Id, "member.accept").Count(&audits).Error)
+	assert.Zero(t, members)
+	assert.Zero(t, audits)
+
+	require.NoError(t, db.Model(&users[1]).Update("status", common.UserStatusEnabled).Error)
+	accepted, err := AcceptOrganizationInvite(users[1].Id, invite.Id)
+	require.NoError(t, err)
+	assert.Equal(t, org.Id, accepted)
+	assert.ErrorIs(t, RevokeOrganizationInvite(org.Id, users[0].Id, invite.Id), ErrOrganizationInvite)
+	accepted, err = AcceptOrganizationInvite(users[1].Id, invite.Id)
+	require.NoError(t, err)
+	assert.Equal(t, org.Id, accepted)
+	require.NoError(t, db.Model(&OrganizationAudit{}).Where("org_id = ? AND action = ?", org.Id, "member.accept").Count(&audits).Error)
+	assert.EqualValues(t, 1, audits)
+}
+
+func TestOrganizationInviteAcceptAndRevokeHaveOneWinner(t *testing.T) {
+	db := organizationTestDatabase(t)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
+		sqlDB.SetMaxOpenConns(1)
+	}
+	users := []User{{Username: "owner", AffCode: "owner"}, {Username: "recipient", AffCode: "recipient"}}
+	require.NoError(t, db.Create(&users).Error)
+	org, err := CreateTeamOrganization(users[0].Id, "Team", "invite-winner")
+	require.NoError(t, err)
+	invite, err := CreateOrganizationInvite(org.Id, users[0].Id, users[1].Username, OrgRoleMember)
+	require.NoError(t, err)
+
+	start := make(chan struct{})
+	accepted := make(chan error, 1)
+	revoked := make(chan error, 1)
+	go func() {
+		<-start
+		_, err := AcceptOrganizationInvite(users[1].Id, invite.Id)
+		accepted <- err
+	}()
+	go func() {
+		<-start
+		revoked <- RevokeOrganizationInvite(org.Id, users[0].Id, invite.Id)
+	}()
+	close(start)
+	acceptErr, revokeErr := <-accepted, <-revoked
+
+	require.NoError(t, db.First(invite, invite.Id).Error)
+	var members, acceptAudits, revokeAudits int64
+	require.NoError(t, db.Model(&OrganizationMember{}).Where("org_id = ? AND user_id = ?", org.Id, users[1].Id).Count(&members).Error)
+	require.NoError(t, db.Model(&OrganizationAudit{}).Where("org_id = ? AND action = ?", org.Id, "member.accept").Count(&acceptAudits).Error)
+	require.NoError(t, db.Model(&OrganizationAudit{}).Where("org_id = ? AND action = ?", org.Id, "invite.revoke").Count(&revokeAudits).Error)
+	if acceptErr == nil {
+		assert.ErrorIs(t, revokeErr, ErrOrganizationInvite)
+		assert.Equal(t, "accepted", invite.Status)
+		assert.Equal(t, users[1].Id, invite.AcceptedBy)
+		assert.EqualValues(t, 1, members)
+		assert.EqualValues(t, 1, acceptAudits)
+		assert.Zero(t, revokeAudits)
+	} else {
+		require.NoError(t, revokeErr)
+		assert.ErrorIs(t, acceptErr, ErrOrganizationInvite)
+		assert.Equal(t, "revoked", invite.Status)
+		assert.Zero(t, invite.AcceptedBy)
+		assert.Zero(t, members)
+		assert.Zero(t, acceptAudits)
+		assert.EqualValues(t, 1, revokeAudits)
+	}
+}
