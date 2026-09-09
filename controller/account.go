@@ -48,7 +48,11 @@ func GetAccountSummary(c *gin.Context) {
 	}
 	for _, sub := range subscriptions {
 		if sub.Status == "active" && sub.EndTime > common.GetTimestamp() {
-			available += max(int64(0), sub.AmountTotal-sub.AmountUsed)
+			if sub.AmountTotal == 0 {
+				available = int64(common.MaxWalletQuota)
+				break
+			}
+			available += min(max(int64(0), sub.AmountTotal-sub.AmountUsed), int64(common.MaxWalletQuota)-available)
 		}
 	}
 	common.ApiSuccess(c, gin.H{"available_quota": available, "request_count": usage.RequestCount,

@@ -38,7 +38,7 @@ func ValidateOrganizationPlan(tx *gorm.DB, org *Organization, plan *Subscription
 		if err := tx.Model(&UserSubscription{}).Scopes(OrgScope(org.Id)).Where("plan_id = ?", plan.Id).Count(&count).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&SubscriptionOrder{}).Scopes(OrgScope(org.Id)).Where("plan_id = ? AND status = ?", plan.Id, common.TopUpStatusPending).Count(&pending).Error; err != nil {
+		if err := tx.Model(&SubscriptionOrder{}).Scopes(OrgScope(org.Id)).Where("plan_id = ? AND status = ? AND create_time > ?", plan.Id, common.TopUpStatusPending, common.GetTimestamp()-subscriptionCheckoutHoldSeconds).Count(&pending).Error; err != nil {
 			return err
 		}
 		if count+pending >= int64(plan.MaxPurchasePerUser) {

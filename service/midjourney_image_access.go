@@ -34,7 +34,13 @@ func GetMidjourneyImageWithAccess(orgID, rowID int, taskID, access string) (*mod
 		return nil, ErrTaskArtifactAccessInvalid
 	}
 	var task model.Midjourney
-	if err := model.DB.Where("org_id = ? AND id = ? AND mj_id = ?", orgID, rowID, taskID).First(&task).Error; err != nil {
+	query := model.DB.Where("id = ? AND mj_id = ?", rowID, taskID)
+	if orgID == 0 {
+		query = query.Where("org_id IS NULL OR org_id = 0")
+	} else {
+		query = query.Scopes(model.OrgScope(orgID))
+	}
+	if err := query.First(&task).Error; err != nil {
 		return nil, ErrTaskArtifactAccessInvalid
 	}
 	scope := fmt.Sprintf("mj:%d:%d", orgID, rowID)

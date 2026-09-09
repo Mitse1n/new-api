@@ -2,9 +2,11 @@ package model
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func InsertOrganizationToken(token *Token) error {
@@ -86,7 +88,7 @@ func GetOrganizationToken(scope OrganizationTokenScope, id int) (*Token, error) 
 	return &token, err
 }
 
-func ListOrganizationTokens(scope OrganizationTokenScope, keyword string, offset, limit int) ([]*Token, int64, error) {
+func ListOrganizationTokens(scope OrganizationTokenScope, keyword, token string, offset, limit int) ([]*Token, int64, error) {
 	query := DB.Model(&Token{}).Scopes(scope.Apply)
 	if keyword != "" {
 		pattern, err := sanitizeLikePattern(keyword)
@@ -94,6 +96,13 @@ func ListOrganizationTokens(scope OrganizationTokenScope, keyword string, offset
 			return nil, 0, err
 		}
 		query = query.Where("name LIKE ? ESCAPE '!'", pattern)
+	}
+	if token != "" {
+		pattern, err := sanitizeLikePattern(strings.TrimPrefix(token, "sk-"))
+		if err != nil {
+			return nil, 0, err
+		}
+		query = query.Where("? LIKE ? ESCAPE '!'", clause.Column{Name: "key"}, pattern)
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {

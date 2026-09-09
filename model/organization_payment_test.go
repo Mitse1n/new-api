@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -110,4 +111,50 @@ func TestOrganizationBudgetAlertsDeduplicateSettlements(t *testing.T) {
 		assert.Equal(t, "pending", n.Status)
 	}
 	assert.ElementsMatch(t, []string{users[0].Email, "finance@example.test", "https://alerts.example.test/budget"}, destinations)
+}
+
+func TestAbandonedSubscriptionCheckoutReleasesPurchaseLimit(t *testing.T) {
+	for _, team := range []bool{false, true} {
+		t.Run(fmt.Sprint("team=", team), func(t *testing.T) {
+			db, org, users := organizationBillingFixture(t)
+			plan := SubscriptionPlan{Title: "Limited", Enabled: true, Audience: "both", PriceAmount: 10, MaxPurchasePerUser: 1, DurationUnit: SubscriptionDurationMonth, DurationValue: 1, TotalAmount: 500}
+			require.NoError(t, db.Create(&plan).Error)
+			orgID := 0
+			if team {
+				orgID = org.Id
+			}
+			order := SubscriptionOrder{OrgId: orgID, UserId: users[0].Id, PlanId: plan.Id, Money: 10, TradeNo: "abandoned", PaymentProvider: PaymentProviderEpay, Status: common.TopUpStatusPending}
+			require.NoError(t, order.Insert())
+			validate := func() error {
+				if team {
+					return ValidateOrganizationPlan(db, org, &plan)
+				}
+				return ValidateAccountSubscriptionPlan(db, users[0].Id, &plan)
+			}
+			assert.Error(t, validate(), "a fresh checkout reserves its purchase slot")
+			require.NoError(t, db.Model(&order).Update("create_time", common.GetTimestamp()-25*3600).Error)
+			assert.NoError(t, validate(), "abandoned checkout must not reserve the slot forever")
+			replacement := SubscriptionOrder{OrgId: orgID, UserId: users[0].Id, PlanId: plan.Id, Money: 10, TradeNo: "replacement", PaymentProvider: PaymentProviderEpay, Status: common.TopUpStatusPending}
+			require.NoError(t, replacement.Insert())
+			require.NoError(t, ExpirePendingSubscriptionOrders())
+			require.NoError(t, ExpirePendingSubscriptionOrders(), "maintenance is idempotent")
+			require.NoError(t, db.First(&order, order.Id).Error)
+			assert.Equal(t, common.TopUpStatusExpired, order.Status)
+			require.NoError(t, db.First(&replacement, replacement.Id).Error)
+			assert.Equal(t, common.TopUpStatusPending, replacement.Status)
+			assert.Error(t, validate(), "the replacement reserves a new slot")
+			// A local deadline cannot discard money already collected upstream.
+			assert.ErrorIs(t, CompleteSubscriptionOrder(order.TradeNo, "", PaymentProviderStripe, ""), ErrPaymentMethodMismatch)
+			require.NoError(t, CompleteSubscriptionOrder(order.TradeNo, "", PaymentProviderEpay, ""))
+			require.NoError(t, CompleteSubscriptionOrder(order.TradeNo, "", PaymentProviderEpay, ""))
+			require.NoError(t, ExpirePendingSubscriptionOrders())
+			require.NoError(t, db.First(&order, order.Id).Error)
+			assert.Equal(t, common.TopUpStatusSuccess, order.Status)
+			var subs []UserSubscription
+			require.NoError(t, db.Where("org_id = ? AND user_id = ?", orgID, users[0].Id).Find(&subs).Error)
+			require.Len(t, subs, 1)
+			assert.Equal(t, int64(500), subs[0].AmountTotal)
+
+		})
+	}
 }

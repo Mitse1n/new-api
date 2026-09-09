@@ -155,7 +155,7 @@ func tokenOrganizationScope(c *gin.Context) model.OrganizationTokenScope {
 
 func GetAllTokens(c *gin.Context) {
 	page := common.GetPageQuery(c)
-	tokens, total, err := model.ListOrganizationTokens(tokenOrganizationScope(c), c.Query("keyword"), page.GetStartIdx(), page.GetPageSize())
+	tokens, total, err := model.ListOrganizationTokens(tokenOrganizationScope(c), c.Query("keyword"), c.Query("token"), page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return

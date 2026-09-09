@@ -22,6 +22,9 @@ import (
 
 // External DSNs must name disposable databases created only for this test.
 func TestOrganizationPublicAPIBoundary(t *testing.T) {
+	previousMaster := common.IsMasterNode
+	common.IsMasterNode = true
+	t.Cleanup(func() { common.IsMasterNode = previousMaster })
 	var dialector gorm.Dialector = sqlite.Open(t.TempDir() + "/boundary.db")
 	dialect := common.DatabaseTypeSQLite
 	if dsn := os.Getenv("ORGANIZATION_API_TEST_MYSQL_DSN"); dsn != "" {
@@ -136,6 +139,56 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 		var stored model.Token
 		require.NoError(t, db.First(&stored, key.Id).Error)
 		assert.Zero(t, stored.OrgId)
+	})
+	t.Run("unlimited personal subscription remains available without wallet overflow", func(t *testing.T) {
+		sub := model.UserSubscription{UserId: owner.Id, Status: "active", EndTime: common.GetTimestamp() + 3600, AmountTotal: 0, AmountUsed: 50, AllowWalletOverflow: false}
+		require.NoError(t, db.Create(&sub).Error)
+		defer db.Delete(&sub)
+		result := request("GET", "/account/summary", "", "")
+		require.Equal(t, 200, result.Code)
+		var body struct {
+			Data struct {
+				AvailableQuota int64 `json:"available_quota"`
+			}
+		}
+		require.NoError(t, common.Unmarshal(result.Body.Bytes(), &body))
+		assert.Equal(t, int64(common.MaxWalletQuota), body.Data.AvailableQuota)
+	})
+	t.Run("key search retains secret filtering and organization isolation", func(t *testing.T) {
+		other := model.Token{UserId: owner.Id, Name: "other-key", Key: "other-secret"}
+		teamKey := model.Token{OrgId: team.Id, UserId: owner.Id, Name: "team-key", Key: "team-secret"}
+		require.NoError(t, db.Create(&other).Error)
+		require.NoError(t, db.Create(&teamKey).Error)
+		defer db.Delete(&other)
+		defer db.Delete(&teamKey)
+		for _, tc := range []struct {
+			query, header string
+			count         int
+			name          string
+		}{
+			{"sk-private-token-key", "", 1, "personal-key"},
+			{"missing", "", 0, ""},
+			{"sk-team-secret", "", 0, ""},
+			{"sk-team-secret", strconv.Itoa(team.Id), 1, "team-key"},
+		} {
+			result := request("GET", "/account/tokens?token="+tc.query, tc.header, "")
+			var body struct {
+				Success bool
+				Data    struct {
+					Total int
+					Items []struct{ Name string }
+				}
+			}
+			require.NoError(t, common.Unmarshal(result.Body.Bytes(), &body))
+			require.True(t, body.Success, result.Body.String())
+			assert.Equal(t, tc.count, body.Data.Total)
+			require.Len(t, body.Data.Items, tc.count)
+			if tc.count > 0 {
+				assert.Equal(t, tc.name, body.Data.Items[0].Name)
+			}
+			assert.NotContains(t, result.Body.String(), "private-token-key")
+			assert.NotContains(t, result.Body.String(), "team-secret")
+		}
 	})
 	t.Run("organization endpoints require an existing team", func(t *testing.T) {
 		id := strconv.Itoa(team.Id + 1000)

@@ -212,6 +212,18 @@ func (p *SubscriptionPlan) NormalizeDefaults() {
 	}
 }
 
+// Pending checkouts reserve a purchase slot for 24 hours. This is a local
+// reservation deadline, not proof that the payment provider cannot charge later.
+const subscriptionCheckoutHoldSeconds int64 = 24 * 60 * 60
+
+// ExpirePendingSubscriptionOrders releases abandoned checkout reservations.
+// Completed orders are retained, and delayed verified payments can still settle.
+func ExpirePendingSubscriptionOrders() error {
+	return DB.Model(&SubscriptionOrder{}).
+		Where("status = ? AND create_time <= ?", common.TopUpStatusPending, common.GetTimestamp()-subscriptionCheckoutHoldSeconds).
+		Update("status", common.TopUpStatusExpired).Error
+}
+
 // Subscription order (payment -> webhook -> create UserSubscription)
 type SubscriptionOrder struct {
 	PlanSnapshot string  `json:"-" gorm:"type:text"`
@@ -560,7 +572,7 @@ func ValidateAccountSubscriptionPlan(tx *gorm.DB, userID int, plan *Subscription
 	if err := scope.Apply(tx.Model(&UserSubscription{})).Where("plan_id = ?", plan.Id).Count(&purchased).Error; err != nil {
 		return err
 	}
-	if err := scope.Apply(tx.Model(&SubscriptionOrder{})).Where("plan_id = ? AND status = ?", plan.Id, common.TopUpStatusPending).Count(&pending).Error; err != nil {
+	if err := scope.Apply(tx.Model(&SubscriptionOrder{})).Where("plan_id = ? AND status = ? AND create_time > ?", plan.Id, common.TopUpStatusPending, common.GetTimestamp()-subscriptionCheckoutHoldSeconds).Count(&pending).Error; err != nil {
 		return err
 	}
 	if purchased+pending >= int64(plan.MaxPurchasePerUser) {
@@ -677,7 +689,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if order.Status == common.TopUpStatusSuccess {
 			return nil
 		}
-		if order.Status != common.TopUpStatusPending && !(order.OrgId > 0 && (order.Status == common.TopUpStatusExpired || order.Status == common.TopUpStatusFailed)) {
+		if order.Status != common.TopUpStatusPending && order.Status != common.TopUpStatusExpired && !(order.OrgId > 0 && order.Status == common.TopUpStatusFailed) {
 			return ErrSubscriptionOrderStatusInvalid
 		}
 		var plan *SubscriptionPlan

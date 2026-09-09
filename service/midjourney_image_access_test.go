@@ -2,6 +2,7 @@ package service
 
 import (
 	"net/url"
+	"os"
 	"strconv"
 	"testing"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -49,5 +52,40 @@ func TestMidjourneyImageCapabilityRejectsForeignOrganizationAndDisabledOrganizat
 	}
 	require.NoError(t, db.Model(&model.Organization{}).Where("id = ?", 1).Update("status", model.OrganizationDisabled).Error)
 	_, err = GetMidjourneyImageWithAccess(1, 11, tasks[0].MjId, access)
+	assert.ErrorIs(t, err, ErrTaskArtifactAccessInvalid)
+}
+
+func TestMidjourneyImageCapabilityAcceptsLegacyPersonalOwnership(t *testing.T) {
+	previousDB, previousSecret := model.DB, common.CryptoSecret
+	var dialector gorm.Dialector = sqlite.Open(t.TempDir() + "/legacy-mj.db")
+	// These optional DSNs must point to a disposable database dedicated to this test.
+	if dsn := os.Getenv("P2_IMAGE_MYSQL_DSN"); dsn != "" {
+		dialector = mysql.Open(dsn)
+	}
+	if dsn := os.Getenv("P2_IMAGE_POSTGRES_DSN"); dsn != "" {
+		dialector = postgres.Open(dsn)
+	}
+	db, err := gorm.Open(dialector, &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Midjourney{}))
+	model.DB, common.CryptoSecret = db, "legacy-image-fixture"
+	t.Cleanup(func() {
+		model.DB, common.CryptoSecret = previousDB, previousSecret
+		sqlDB, err := db.DB()
+		require.NoError(t, err)
+		require.NoError(t, sqlDB.Close())
+	})
+	task := model.Midjourney{UserId: 7, MjId: "legacy", ImageUrl: "https://example.test/image"}
+	require.NoError(t, db.Create(&task).Error)
+	require.NoError(t, db.Model(&task).Update("org_id", nil).Error)
+	link, err := BuildMidjourneyImageURL(&task)
+	require.NoError(t, err)
+	parsed, err := url.Parse(link)
+	require.NoError(t, err)
+	access := parsed.Query().Get(TaskArtifactAccessQueryParameter)
+	got, err := GetMidjourneyImageWithAccess(0, task.Id, task.MjId, access)
+	require.NoError(t, err)
+	assert.Equal(t, task.ImageUrl, got.ImageUrl)
+	_, err = GetMidjourneyImageWithAccess(1, task.Id, task.MjId, access)
 	assert.ErrorIs(t, err, ErrTaskArtifactAccessInvalid)
 }
