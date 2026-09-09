@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -249,4 +250,39 @@ func TestOrganizationRequestKeyLimitAndWalletCommitTogether(t *testing.T) {
 	assert.Zero(t, token.UsedQuota)
 	assert.Equal(t, int64(1000), org.Quota)
 	assert.Zero(t, org.UsedQuota)
+}
+
+func TestOrganizationTaskSettlementRequiresOriginalReceipt(t *testing.T) {
+	for _, requestID := range []string{"", "missing-receipt"} {
+		t.Run(fmt.Sprintf("request_id=%q", requestID), func(t *testing.T) {
+			db, org, users := organizationBillingFixture(t)
+			token := Token{OrgId: org.Id, UserId: users[1].Id, Key: "missing-receipt-key", RemainQuota: 900, UsedQuota: 100}
+			require.NoError(t, db.Create(&token).Error)
+			task := Task{OrgId: org.Id, UserId: users[1].Id, TaskID: "missing-receipt-task", Quota: 100, PrivateData: TaskPrivateData{TokenId: token.Id, BillingRequestId: requestID}}
+			mj := Midjourney{OrgId: org.Id, UserId: users[1].Id, TokenId: token.Id, BillingRequestId: requestID, Quota: 100}
+			require.NoError(t, db.Create(&task).Error)
+			require.NoError(t, db.Create(&mj).Error)
+			want := error(gorm.ErrRecordNotFound)
+			if requestID == "" {
+				want = ErrOrganizationInput
+			}
+			_, err := SettleOrganizationTaskQuota(&task, 0)
+			require.ErrorIs(t, err, want)
+			_, err = RefundOrganizationMidjourneyQuota(&mj)
+			require.ErrorIs(t, err, want)
+			require.NoError(t, db.First(&task, task.ID).Error)
+			require.NoError(t, db.First(&mj, mj.Id).Error)
+			require.NoError(t, db.First(org, org.Id).Error)
+			require.NoError(t, db.First(&token, token.Id).Error)
+			assert.Equal(t, 100, task.Quota)
+			assert.Equal(t, 100, mj.Quota)
+			assert.Equal(t, int64(1000), org.Quota)
+			assert.Zero(t, org.UsedQuota)
+			assert.Equal(t, 900, token.RemainQuota)
+			assert.Equal(t, 100, token.UsedQuota)
+			var receipts int64
+			require.NoError(t, db.Model(&OrganizationCharge{}).Count(&receipts).Error)
+			assert.Zero(t, receipts)
+		})
+	}
 }

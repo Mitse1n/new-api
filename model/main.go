@@ -389,17 +389,14 @@ func migrateDB() error {
 			return err
 		}
 	}
-	return DisableInactiveOrganizationTokens(DB)
+	return nil
 }
 
 func migrateLOGDB() error {
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return migrateClickHouseLogDB()
 	}
-	if err := LOG_DB.AutoMigrate(&Log{}); err != nil {
-		return err
-	}
-	return nil
+	return LOG_DB.AutoMigrate(&Log{})
 }
 
 func migrateClickHouseLogDB() error {

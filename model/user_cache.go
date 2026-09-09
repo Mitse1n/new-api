@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const userCacheSchemaVersion = 4
+const userCacheSchemaVersion = 2
 
 type UserBase struct {
 	Id          int    `json:"id"`

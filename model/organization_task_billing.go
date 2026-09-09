@@ -2,7 +2,6 @@ package model
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
@@ -31,9 +30,9 @@ func SettleOrganizationTaskQuota(task *Task, actual int) (int, error) {
 		}
 		requestID := current.PrivateData.BillingRequestId
 		if requestID == "" {
-			requestID = fmt.Sprintf("migrated-task:%d", current.ID)
+			return ErrOrganizationInput
 		}
-		if err := adjustOrganizationAssetQuotaTx(tx, &org, current.UserId, current.PrivateData.TokenId, requestID, current.PrivateData.SubscriptionId, current.Quota, actual); err != nil {
+		if err := adjustOrganizationAssetQuotaTx(tx, &org, current.PrivateData.TokenId, requestID, current.Quota, actual); err != nil {
 			return err
 		}
 		return tx.Model(&current).Update("quota", actual).Error
@@ -64,9 +63,9 @@ func RefundOrganizationMidjourneyQuota(task *Midjourney) (int, error) {
 		}
 		requestID := current.BillingRequestId
 		if requestID == "" {
-			requestID = fmt.Sprintf("migrated-mj:%d", current.Id)
+			return ErrOrganizationInput
 		}
-		if err := adjustOrganizationAssetQuotaTx(tx, &org, current.UserId, current.TokenId, requestID, current.SubscriptionId, current.Quota, 0); err != nil {
+		if err := adjustOrganizationAssetQuotaTx(tx, &org, current.TokenId, requestID, current.Quota, 0); err != nil {
 			return err
 		}
 		return tx.Model(&current).Update("quota", 0).Error
@@ -77,26 +76,10 @@ func RefundOrganizationMidjourneyQuota(task *Midjourney) (int, error) {
 	return refunded, err
 }
 
-func adjustOrganizationAssetQuotaTx(tx *gorm.DB, org *Organization, userID, tokenID int, requestID string, subscriptionID, previous, actual int) error {
+func adjustOrganizationAssetQuotaTx(tx *gorm.DB, org *Organization, tokenID int, requestID string, previous, actual int) error {
 	var receipt OrganizationCharge
-	result := tx.Scopes(OrgScope(org.Id)).Where("request_id = ?", requestID).Find(&receipt)
-	if result.Error != nil {
-		return result.Error
-	}
-	if receipt.Id == 0 {
-		// Older team tasks may lack a receipt; their initial charge is already
-		// reflected in the team wallet. Only the settlement delta is applied.
-		receipt = OrganizationCharge{RequestId: requestID, OrgId: org.Id, UserId: userID, TokenId: tokenID, Quota: int64(previous), Status: "settled", SubscriptionId: subscriptionID, PeriodStart: org.BudgetPeriodStart}
-		if subscriptionID > 0 {
-			var sub UserSubscription
-			if err := tx.Scopes(OrgScope(org.Id)).Where("id = ?", subscriptionID).First(&sub).Error; err != nil {
-				return err
-			}
-			receipt.SubscriptionPeriod = sub.LastResetTime
-		}
-		if err := tx.Create(&receipt).Error; err != nil {
-			return err
-		}
+	if err := tx.Scopes(OrgScope(org.Id)).Where("request_id = ?", requestID).First(&receipt).Error; err != nil {
+		return err
 	}
 	if err := finalizeOrganizationChargeTx(tx, org.Id, requestID, int64(actual), actual == 0, true); err != nil {
 		return err

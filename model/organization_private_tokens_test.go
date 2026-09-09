@@ -58,30 +58,3 @@ func TestOrganizationMemberRevocationDisablesOnlyTheirKeysAndPreservesSettlement
 		})
 	}
 }
-
-func TestOrganizationStartupRevokesLegacyInactiveMemberKeysIdempotently(t *testing.T) {
-	db, org, users := organizationBillingFixture(t)
-	keys := []Token{
-		{OrgId: org.Id, UserId: users[0].Id, Key: "active-member-key", Status: common.TokenStatusEnabled},
-		{OrgId: org.Id, UserId: users[1].Id, Key: "inactive-member-key", Status: common.TokenStatusEnabled},
-		{OrgId: org.Id, UserId: 999, Key: "missing-member-key", Status: common.TokenStatusEnabled},
-	}
-	require.NoError(t, db.Create(&keys).Error)
-	require.NoError(t, db.Model(&OrganizationMember{}).Where("org_id = ? AND user_id = ?", org.Id, users[1].Id).Update("status", OrganizationDeleting).Error)
-	for i := 0; i < 2; i++ {
-		require.NoError(t, DisableInactiveOrganizationTokens(db))
-	}
-	for i, key := range keys {
-		var saved Token
-		require.NoError(t, db.First(&saved, key.Id).Error)
-		expected := common.TokenStatusDisabled
-		if i == 0 {
-			expected = common.TokenStatusEnabled
-		}
-		assert.Equal(t, expected, saved.Status)
-		assert.Equal(t, key.OrgId, saved.OrgId)
-		assert.Equal(t, key.UserId, saved.UserId)
-	}
-	require.NoError(t, db.First(org, org.Id).Error)
-	assert.Equal(t, int64(1000), org.Quota)
-}

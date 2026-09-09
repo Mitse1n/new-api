@@ -216,26 +216,3 @@ func disableOrganizationTokensTx(tx *gorm.DB, tokens []Token) error {
 	}
 	return tx.Model(&Token{}).Where("id IN ?", ids).Update("status", common.TokenStatusDisabled).Error
 }
-
-// Startup reconciles keys left usable by the previous organization-asset policy.
-// Writes are quiesced; the cache namespace changes with this migration.
-func DisableInactiveOrganizationTokens(db *gorm.DB) error {
-	for {
-		done := false
-		err := db.Transaction(func(tx *gorm.DB) error {
-			active := tx.Model(&OrganizationMember{}).Select("1").Where("organization_members.org_id = tokens.org_id AND organization_members.user_id = tokens.user_id AND organization_members.status = ?", OrganizationActive)
-			var tokens []Token
-			if err := tx.Where("org_id > 0 AND status <> ? AND NOT EXISTS (?)", common.TokenStatusDisabled, active).Order("id").Limit(250).Select("id", "key").Find(&tokens).Error; err != nil {
-				return err
-			}
-			done = len(tokens) == 0
-			return disableOrganizationTokensTx(tx, tokens)
-		})
-		if err != nil {
-			return err
-		}
-		if done {
-			return nil
-		}
-	}
-}

@@ -125,11 +125,11 @@ TENANCY_VERIFY_STARTUP=1 /tmp/new-api-cleanup-startup
 
 所有角色只能查看和管理自己在当前组织内创建的 API Key，组织钱包仍统一结算。Owner/Admin 保留成员用量、模型、费用和预算管理。创建提示明确“为自己创建，使用组织额度”。
 
-停用/移除成员会在同一事务中禁用其组织 Key，并失效缓存；其他组织和个人 Key 不受影响。恢复成员后需本人显式启用旧 Key 或创建新 Key。已预扣请求继续结算/退款，历史记录保留。启动对旧数据执行同样的非活跃成员 Key 清理，并升级 Token 缓存命名空间；此升级不新增表或字段。
+停用/移除成员会在同一事务中禁用其组织 Key，并失效缓存；其他组织和个人 Key 不受影响。恢复成员后需本人显式启用旧 Key 或创建新 Key。已预扣请求继续结算/退款，历史记录保留。Token 缓存使用 `token:org-v1:` 隔离正式版不含组织字段的缓存；不在启动时修复未发布中间版本的成员 Key。
 
-升级前备份数据库，停止旧实例并统一切换版本。若回滚到此前的组织资产语义，恢复升级前数据库备份及匹配的旧镜像，并使用独立空 Redis 库；不要与新版本混跑。
+升级前备份数据库，停止旧实例并统一切换版本。若回滚到正式发布版，恢复升级前数据库备份及匹配的旧镜像，并使用独立空 Redis 库；不要与新版本混跑。
 
-本次验证：SQLite 3.50.4、MySQL 5.7.44、PostgreSQL 9.6.24、Redis 7.2.16。三种数据库均通过全部 `TestOrganization` 行为测试（包含成员撤销、恢复、历史结算、启动清理），并分别完成全新库和实际发布版 `v1.0.0-rc.30 / 27ff6a87` 夹具升级的两次启动校验。余额、资源归属、历史日志和唯一索引均保留。命令如下；所有 DSN 必须指向可删除的独立测试库：
+本次验证：SQLite 3.50.4、MySQL 5.7.44、PostgreSQL 9.6.24、Redis 7.2.16。三种数据库均通过全部 `TestOrganization` 行为测试（该次历史验证包含成员撤销、恢复、历史结算和现已移除的启动清理），并分别完成全新库和实际发布版 `v1.0.0-rc.30 / 27ff6a87` 夹具升级的两次启动校验。余额、资源归属、历史日志和唯一索引均保留。命令如下；所有 DSN 必须指向可删除的独立测试库：
 
 ```sh
 go test ./model ./controller ./service/authz -run 'TestOrganization|TestGetAllTokens|TestGetToken|TestSearchTokens|TestUpdateToken' -count=1
@@ -148,3 +148,41 @@ bun run build
 真实 Redis 测试验证热缓存撤销；前端 51 项测试、类型检查、涉及文件 lint 和生产构建通过。本地独立应用的真实 HTTP 联调覆盖 Owner/Admin/Member 各自密钥列表、伪造成员筛选、详情/修改/删除/混合批量越权拒绝、平台密钥列表关闭、用量查询保留、停用后 relay 认证返回 401、恢复成员后需创建者显式启用。
 
 清理邀请链接的复验：三种数据库在独立库中建立清理前开发表，连续两次清理并初始化；现有站内邀请的 ID、有效期、组织/接收人索引保留，废弃字段消失，清理后创建、接受、拒绝均通过。一次性开发表夹具不进入发布代码。前端仍为 19 项组织测试通过，七种语言合计清除 12 个废弃文案键，生成路由中已无邀请链接页面。
+
+## 未发布中间版本兼容清理（2026-09-09）
+
+本分支仅在个人开发环境运行过，发布升级只以正式版为基线：
+
+- 用户缓存结构与主分支一致，`userCacheSchemaVersion` 恢复为 `2`。
+- Token 缓存保留首次组织字段隔离命名空间 `token:org-v1:`，移除中间版本的编号递增。
+- 移除启动时为旧组织资产策略禁用非活跃成员 Key 的修复及专用测试。正常成员停用/移除事务仍负责撤销 Key。
+- 组织任务和 Midjourney 结算必须有原始请求 ID 和账单记录；缺失时返回错误，不生成 `migrated-task` / `migrated-mj` ID，也不补造账单。新增测试断言失败时钱包、Key、任务额度及账单数量均不变。
+- 保留正式版升级需要的组织字段、ClickHouse 字段、SQLite 套餐字段和 Casbin domain 迁移。
+
+验证使用 `gcys@10.0.29.49` 上独立临时容器和数据库，没有更新运行中的开发应用。引擎版本为 SQLite **3.50.4**、MySQL **8.0.46**、PostgreSQL **15.19**。三引擎的组织行为测试、全新数据库两次启动、正式发布版 **v1.0.0-rc.35** 夹具升级后两次启动均通过。MySQL/PostgreSQL 同时覆盖独立日志库；SQLite 使用主日志共享库。升级校验覆盖个人余额、Key 余额、日志额度、资源归属及组织唯一索引。
+
+实际执行命令（工作目录 `/tmp/new-api-compat-check`，DSN 均指向临时库）：
+
+```sh
+# 本地编译当前代码和正式版夹具
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -c -o /tmp/new-api-compat-check/model.test ./model
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/new-api-compat-check/startup ./tools/multi-tenancy-verify
+# released-fixture 使用 git archive v1.0.0-rc.35 导出的代码及 tools/multi-tenancy/released-fixture.go.txt 构建
+
+# 远端行为矩阵
+./model.test -test.run 'TestOrganization|TestUserAuth|TestPendingUserAuth|TestCommittedUserAuth|TestTokenCache|TestTryReserveQuota' -test.count=1
+TENANCY_TEST_MYSQL_DSN="$MYSQL_TEST_DSN" ./model.test -test.run TestOrganization -test.count=1
+TENANCY_TEST_POSTGRES_DSN="$POSTGRES_TEST_DSN" ./model.test -test.run TestOrganization -test.count=1
+
+# 每种数据库分别配置 SQL_DSN、LOG_SQL_DSN 或 SQLITE_PATH
+# fresh 直接执行 startup；upgrade 先连续执行两次 released-fixture
+./released-fixture
+./released-fixture
+TENANCY_VERIFY_STARTUP=1 ./startup # 内部连续执行两次初始化及断言
+
+# 本地相关包回归
+go test ./model ./service/authz -run 'TestOrganization|TestUserAuth|TestPendingUserAuth|TestCommittedUserAuth|TestTokenCache|TestTryReserveQuota' -count=1
+go test ./controller ./service -run 'TestOrganization|TestMidjourneyImage' -count=1
+```
+
+另以同一正式版夹具新建基线库，比较升级后所有原有索引定义及 PostgreSQL 约束，均保留：SQLite 主库 153 条，MySQL 主库/日志库 213/29 条，PostgreSQL 主库/日志库 217/25 条。临时验证脚本及日志保存在远端 `/tmp/new-api-compat-check`，日志另复制到本地 `/tmp/new-api-compat-check/results`。测试容器验证后移除。
