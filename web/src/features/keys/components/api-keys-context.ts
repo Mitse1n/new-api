@@ -27,6 +27,14 @@ type ApiKeysContextType = {
   setCurrentRow: React.Dispatch<React.SetStateAction<ApiKey | null>>
   refreshTrigger: number
   triggerRefresh: () => void
+  resolvedKey: string
+  setResolvedKey: React.Dispatch<React.SetStateAction<string>>
+  resolveRealKey: (id: number) => Promise<string | null>
+  resolveRealKeysBatch: (ids: number[]) => Promise<Record<number, string>>
+  resolvedKeys: Record<number, string>
+  loadingKeys: Record<number, boolean>
+  copiedKeyId: number | null
+  markKeyCopied: (id: number) => void
   createdSecrets: Array<{ name: string; key: string }>
   setCreatedSecrets: React.Dispatch<
     React.SetStateAction<Array<{ name: string; key: string }>>

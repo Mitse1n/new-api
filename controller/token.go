@@ -194,7 +194,22 @@ func GetTokenAutoGroups(c *gin.Context) {
 }
 
 func GetTokenKey(c *gin.Context) {
-	c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "API key secrets are only available when created."})
+	if c.GetInt("org_id") != 0 {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "API key secrets are only available when created."})
+		return
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	token, err := model.GetOrganizationToken(tokenOrganizationScope(c), id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	common.ApiSuccess(c, gin.H{"key": token.GetFullKey()})
 }
 
 func GetTokenStatus(c *gin.Context) {
@@ -460,4 +475,29 @@ func DeleteTokenBatch(c *gin.Context) {
 	})
 }
 
-func GetTokenKeysBatch(c *gin.Context) { GetTokenKey(c) }
+func GetTokenKeysBatch(c *gin.Context) {
+	if c.GetInt("org_id") != 0 {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "API key secrets are only available when created."})
+		return
+	}
+	var batch TokenBatch
+	if err := c.ShouldBindJSON(&batch); err != nil || len(batch.Ids) == 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if len(batch.Ids) > 100 {
+		common.ApiErrorI18n(c, i18n.MsgBatchTooMany, map[string]any{"Max": 100})
+		return
+	}
+	var tokens []model.Token
+	if err := model.DB.Scopes(tokenOrganizationScope(c).Apply).Where("id IN ?", batch.Ids).Find(&tokens).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	keys := make(map[int]string, len(tokens))
+	for _, token := range tokens {
+		keys[token.Id] = token.GetFullKey()
+	}
+	c.Header("Cache-Control", "no-store")
+	common.ApiSuccess(c, gin.H{"keys": keys})
+}

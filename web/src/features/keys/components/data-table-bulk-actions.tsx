@@ -1,3 +1,17 @@
+import type { Table } from '@tanstack/react-table'
+import { Copy, Trash2, Loader2 } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+
+import { DataTableBulkActions as BulkActionsToolbar } from '@/components/data-table'
+import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { copyToClipboard } from '@/lib/copy-to-clipboard'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -16,19 +30,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { Table } from '@tanstack/react-table'
-import { Trash2 } from 'lucide-react'
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useOrganizationStore } from '@/stores/organization-store'
 
-import { DataTableBulkActions as BulkActionsToolbar } from '@/components/data-table'
-import { Button } from '@/components/ui/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-
+import type { ApiKey } from '../types'
+import { useApiKeys } from './api-keys-context'
 import { ApiKeysMultiDeleteDialog } from './api-keys-multi-delete-dialog'
 
 type DataTableBulkActionsProps<TData> = {
@@ -39,11 +44,73 @@ export function DataTableBulkActions<TData>({
   table,
 }: DataTableBulkActionsProps<TData>) {
   const { t } = useTranslation()
+  const orgID = useOrganizationStore((state) => state.activeOrgID)
+  const { resolveRealKeysBatch } = useApiKeys()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isCopying, setIsCopying] = useState(false)
+  const selectedRows = table.getFilteredSelectedRowModel().rows
+
+  const handleBatchCopy = useCallback(async () => {
+    if (selectedRows.length === 0) return
+
+    setIsCopying(true)
+    try {
+      const ids = selectedRows.map((row) => (row.original as ApiKey).id)
+      const keysMap = await resolveRealKeysBatch(ids)
+
+      const lines: string[] = []
+      for (const row of selectedRows) {
+        const apiKey = row.original as ApiKey
+        const realKey = keysMap[apiKey.id]
+        if (realKey) {
+          lines.push(`${apiKey.name}\t${realKey}`)
+        }
+      }
+
+      if (lines.length > 0) {
+        const ok = await copyToClipboard(lines.join('\n'))
+        if (ok) {
+          toast.success(t('Copied {{count}} key(s)', { count: lines.length }))
+        } else {
+          toast.error(t('Failed to copy keys'))
+        }
+      }
+    } catch {
+      toast.error(t('Failed to copy keys'))
+    } finally {
+      setIsCopying(false)
+    }
+  }, [selectedRows, resolveRealKeysBatch, t])
 
   return (
     <>
       <BulkActionsToolbar table={table} entityName='API key'>
+        {orgID === null && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant='outline'
+                  size='icon'
+                  className='size-8'
+                  onClick={handleBatchCopy}
+                  disabled={isCopying}
+                  aria-label={t('Copy selected keys')}
+                />
+              }
+            >
+              {isCopying ? (
+                <Loader2 className='size-4 animate-spin' />
+              ) : (
+                <Copy className='size-4' />
+              )}
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{t('Copy selected keys')}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         <Tooltip>
           <TooltipTrigger
             render={

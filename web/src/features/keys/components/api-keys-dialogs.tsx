@@ -20,9 +20,10 @@ import { useApiKeys } from './api-keys-context'
 import { ApiKeysDeleteDialog } from './api-keys-delete-dialog'
 import { ApiKeysMutateDrawer } from './api-keys-mutate-drawer'
 import { CreatedKeysDialog } from './created-keys-dialog'
+import { CCSwitchDialog } from './dialogs/cc-switch-dialog'
 
 export function ApiKeysDialogs() {
-  const { open, setOpen, currentRow } = useApiKeys()
+  const { open, setOpen, currentRow, resolvedKey } = useApiKeys()
 
   return (
     <>
@@ -33,6 +34,11 @@ export function ApiKeysDialogs() {
       />
       <ApiKeysDeleteDialog />
       <CreatedKeysDialog />
+      <CCSwitchDialog
+        open={open === 'cc-switch'}
+        onOpenChange={(isOpen) => !isOpen && setOpen(null)}
+        tokenKey={resolvedKey}
+      />
     </>
   )
 }

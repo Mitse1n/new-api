@@ -555,15 +555,57 @@ func TestUpdateTokenMasksKeyInResponse(t *testing.T) {
 	}
 }
 
-func TestGetTokenKeyNeverRevealsPersistedSecret(t *testing.T) {
+func TestPersonalTokenSecretsRemainPrivateToTheirOwner(t *testing.T) {
 	db := setupTokenControllerTestDB(t)
-	token := seedToken(t, db, 1, "owned-token", "owner1234token5678")
-	for _, userID := range []int{1, 2} {
-		ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/"+strconv.Itoa(token.Id)+"/key", nil, userID)
-		ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(token.Id)}}
-		GetTokenKey(ctx)
-		assert.Equal(t, http.StatusForbidden, recorder.Code)
-		assert.False(t, decodeAPIResponse(t, recorder).Success)
-		assert.NotContains(t, recorder.Body.String(), token.Key)
+	for _, dialect := range []string{"mysql", "postgres"} {
+		if dsn := os.Getenv("TOKEN_SECRET_TEST_" + strings.ToUpper(dialect) + "_DSN"); dsn != "" {
+			external, managed := openTokenControllerExternalDB(t, dialect, dsn)
+			*managed = true
+			migrateTokenControllerTestDB(t, external)
+			db = external
+		}
+	}
+	personal := seedToken(t, db, 1, "personal", "personal-secret")
+	require.NoError(t, db.Model(personal).Update("org_id", nil).Error)
+	team := seedToken(t, db, 1, "team", "team-secret")
+	require.NoError(t, db.Model(&team).Update("org_id", 1).Error)
+	foreign := seedToken(t, db, 2, "foreign", "foreign-secret")
+	require.NoError(t, db.Model(foreign).Update("org_id", 0).Error)
+	for _, tc := range []struct {
+		name           string
+		orgID, tokenID int
+		allowed        bool
+	}{
+		{"personal owner", 0, personal.Id, true},
+		{"foreign personal", 0, foreign.Id, false},
+		{"team key without header", 0, team.Id, false},
+		{"team key with header", 1, team.Id, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/key", nil, 1)
+			ctx.Set("org_id", tc.orgID)
+			ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(tc.tokenID)}}
+			GetTokenKey(ctx)
+			response := decodeAPIResponse(t, recorder)
+			assert.Equal(t, tc.allowed, response.Success)
+			if tc.allowed {
+				assert.Contains(t, recorder.Body.String(), personal.Key)
+				assert.Equal(t, "no-store", recorder.Header().Get("Cache-Control"))
+			}
+			assert.NotContains(t, recorder.Body.String(), team.Key)
+			assert.NotContains(t, recorder.Body.String(), foreign.Key)
+		})
+	}
+	for _, orgID := range []int{0, 1} {
+		body := TokenBatch{Ids: []int{personal.Id, team.Id, foreign.Id}}
+		ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/batch/keys", body, 1)
+		ctx.Set("org_id", orgID)
+		GetTokenKeysBatch(ctx)
+		assert.Equal(t, orgID == 0, decodeAPIResponse(t, recorder).Success)
+		if orgID == 0 {
+			assert.Contains(t, recorder.Body.String(), personal.Key)
+		}
+		assert.NotContains(t, recorder.Body.String(), team.Key)
+		assert.NotContains(t, recorder.Body.String(), foreign.Key)
 	}
 }
