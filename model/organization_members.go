@@ -274,8 +274,8 @@ func RevokeOrganizationInvite(orgID, actorID, inviteID int) error {
 	})
 }
 
-// Resending rotates the hash on the existing invitation, invalidating the old
-// link while retaining a single pending seat and an auditable invitation id.
+// Resending extends the existing invitation's expiry while retaining its ID.
+// Expired invitations must pass seat and duplicate-invitation checks again.
 func ResendOrganizationInvite(orgID, actorID, inviteID int) (*OrganizationInvite, error) {
 	var invite OrganizationInvite
 	err := DB.Transaction(func(tx *gorm.DB) error {

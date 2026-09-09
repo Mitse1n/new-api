@@ -216,7 +216,7 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 		}
 	}
 
-	if info.OrgId > 0 && true {
+	if info.OrgId > 0 {
 		if apiErr := service.PreConsumeBilling(c, priceData.Quota, info); apiErr != nil {
 			return &dto.MidjourneyResponse{Code: 4, Description: apiErr.Error()}
 		}

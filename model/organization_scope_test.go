@@ -11,7 +11,13 @@ import (
 
 func TestOrganizationScopeRejectsMissingOrganizationAcrossResourceTypes(t *testing.T) {
 	db := organizationTestDatabase(t)
-	for _, resource := range OrganizationResources() {
+	resources := []any{
+		&Token{}, &Log{}, &TopUp{}, &UserSubscription{}, &SubscriptionOrder{},
+		&Task{}, &Midjourney{}, &Redemption{}, &QuotaData{}, &OrganizationMember{},
+		&OrganizationInvite{}, &OrganizationTransfer{}, &OrganizationAudit{},
+		&OrganizationCharge{}, &OrganizationNotification{},
+	}
+	for _, resource := range resources {
 		t.Run(reflect.TypeOf(resource).Elem().Name(), func(t *testing.T) {
 			require.NoError(t, db.Migrator().DropTable(resource))
 			require.NoError(t, db.AutoMigrate(resource))
