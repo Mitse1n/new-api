@@ -460,7 +460,7 @@ CREATE TABLE IF NOT EXISTS logs (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(toDateTime(created_at))
-ORDER BY (org_id, created_at, request_id)%s`, clickHouseLogTTLClause(ttlDays))
+ORDER BY (created_at, request_id)%s`, clickHouseLogTTLClause(ttlDays))
 }
 
 func syncClickHouseLogTTL(ttlDays int) error {
