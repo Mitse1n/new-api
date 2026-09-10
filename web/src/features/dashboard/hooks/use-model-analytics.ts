@@ -41,6 +41,7 @@ export function useModelAnalytics(
 ) {
   const user = useAuthStore((state) => state.auth.user)
   const context = useOrganizationStore((state) => state.context)
+  const activeOrgID = useOrganizationStore((state) => state.activeOrgID)
   const epoch = useOrganizationStore((state) => state.epoch)
   const platform = usePlatformView()
   const isPlatformAdmin = platform && (user?.role ?? 0) >= ROLE.ADMIN
@@ -73,7 +74,9 @@ export function useModelAnalytics(
       if (!response.success) throw new Error('Usage request failed')
       return response.data
     },
-    enabled: !!user?.id && (isPlatformAdmin || !!context),
+    enabled:
+      !!user?.id &&
+      (isPlatformAdmin || (!platform && (activeOrgID === null || !!context))),
   })
   let scope: UsageScope = selectedScope
   if (!canCompare) {

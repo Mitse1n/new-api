@@ -82,7 +82,7 @@ func PlatformOrganizationResources(c *gin.Context) {
 	case "audit":
 		resource = &[]model.OrganizationAudit{}
 	case "logs":
-		resource = &[]model.Log{}
+		resource = &[]*model.Log{}
 		database = model.LOG_DB
 	default:
 		organizationError(c, model.ErrOrganizationInput)
@@ -97,6 +97,13 @@ func PlatformOrganizationResources(c *gin.Context) {
 	if err := query.Order("id desc").Offset(page.GetStartIdx()).Limit(page.GetPageSize()).Find(resource).Error; err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if logs, ok := resource.(*[]*model.Log); ok {
+		if c.GetInt("role") < common.RoleRootUser {
+			model.FormatAdminLogs(*logs)
+		} else {
+			model.FormatRootLogs(*logs)
+		}
 	}
 	var items interface{} = resource
 	if orders, ok := resource.(*[]model.SubscriptionOrder); ok {

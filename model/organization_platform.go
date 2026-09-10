@@ -13,6 +13,9 @@ func PlatformChangeOrganizationStatusTx(tx *gorm.DB, orgID, actorID, status int,
 	if status != OrganizationActive && status != OrganizationDisabled {
 		return ErrOrganizationInput
 	}
+	if status == OrganizationDisabled {
+		status = OrganizationSuspended
+	}
 	org.Status = status
 	if err := tx.Model(&org).Updates(map[string]interface{}{"status": status, "version": gorm.Expr("version + 1")}).Error; err != nil {
 		return err

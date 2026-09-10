@@ -30,7 +30,11 @@ func GetOrganizationLogs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	model.FormatOrganizationLogs(logs)
+	if c.GetInt("org_id") == 0 {
+		model.FormatUserLogs(logs, page.GetStartIdx())
+	} else {
+		model.FormatOrganizationLogs(logs)
+	}
 	page.SetTotal(int(total))
 	page.SetItems(logs)
 	common.ApiSuccess(c, page)

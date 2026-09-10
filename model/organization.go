@@ -16,9 +16,13 @@ const (
 	OrganizationActive   = 1
 	OrganizationDisabled = 2
 	OrganizationDeleting = 3
-	OrgRoleOwner         = "owner"
-	OrgRoleAdmin         = "admin"
-	OrgRoleMember        = "member"
+
+	// Platform suspensions can only be lifted through platform administration.
+	OrganizationSuspended = 4
+
+	OrgRoleOwner  = "owner"
+	OrgRoleAdmin  = "admin"
+	OrgRoleMember = "member"
 )
 
 var (

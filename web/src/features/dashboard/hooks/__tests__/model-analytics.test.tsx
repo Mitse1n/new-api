@@ -234,3 +234,25 @@ test('platform analytics still query global data independently of the selected o
   expect(result.current.canCompare).toBe(false)
   expect(result.current.data).toEqual(rows)
 })
+
+test('personal mode loads account usage without an organization context', async () => {
+  useOrganizationStore.getState().select(null)
+  const { result } = renderHook(() => useModelAnalytics(filters, scope), {
+    wrapper: Wrapper,
+  })
+  await waitFor(() => expect(pending).toHaveLength(1))
+  expect(pending[0].config.url).toBe('/api/data/self')
+  expect(pending[0].config.headers['X-Org-Id']).toBeUndefined()
+  act(() => respond(0, [rows[0]]))
+  await waitFor(() => expect(result.current.query.isSuccess).toBe(true))
+  expect(result.current.data).toEqual([rows[0]])
+})
+
+test('a selected team waits for its validated context before requesting usage', () => {
+  useOrganizationStore.getState().select(20)
+  const { result } = renderHook(() => useModelAnalytics(filters, scope), {
+    wrapper: Wrapper,
+  })
+  expect(result.current.query.fetchStatus).toBe('idle')
+  expect(pending).toHaveLength(0)
+})

@@ -23,10 +23,11 @@ type OrganizationDeletionImpact struct {
 }
 
 // A disabled team remains accessible only through this explicit owner lifecycle
-// operation. Ordinary organization context continues to fail closed.
+// operation. Platform suspensions are excluded even for their owner.
+// Ordinary organization context continues to fail closed.
 func lockOrganizationOwner(tx *gorm.DB, orgID, actorID int) (*Organization, error) {
 	var org Organization
-	if err := lockForUpdate(tx).Where("id = ? AND owner_id = ? AND kind = ?", orgID, actorID, OrganizationTeam).First(&org).Error; err != nil {
+	if err := lockForUpdate(tx).Where("id = ? AND owner_id = ? AND kind = ? AND status IN ?", orgID, actorID, OrganizationTeam, []int{OrganizationActive, OrganizationDisabled}).First(&org).Error; err != nil {
 		return nil, ErrOrganizationAccess
 	}
 	var count int64

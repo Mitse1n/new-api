@@ -186,3 +186,27 @@ go test ./controller ./service -run 'TestOrganization|TestMidjourneyImage' -coun
 ```
 
 另以同一正式版夹具新建基线库，比较升级后所有原有索引定义及 PostgreSQL 约束，均保留：SQLite 主库 153 条，MySQL 主库/日志库 213/29 条，PostgreSQL 主库/日志库 217/25 条。临时验证脚本及日志保存在远端 `/tmp/new-api-compat-check`，日志另复制到本地 `/tmp/new-api-compat-check/results`。测试容器验证后移除。
+
+## PR 审查修复验证（2026-09-10）
+
+本次修复四个问题：平台封禁不能由组织 Owner 解除；平台组织日志按 Admin/Root 分别脱敏；个人日志继续隐藏渠道名称并返回分页展示 ID；Personal 模式的模型分析正常加载，已选择但尚未取得 context 的团队仍等待验证。
+
+平台停用接口继续接受 `status=2`，但保存独立的 `OrganizationSuspended=4`；Owner 自行停用仍保存 `OrganizationDisabled=2`。Owner 生命周期操作只允许 Active/Disabled，平台封禁组织不进入个人组织选择列表，平台恢复接口可以解除封禁。没有新增字段、索引或 schema 迁移。此分支尚未发布；已有开发库若保存了旧的 `status=2` 平台封禁，需通过平台停用接口重新执行封禁，不能仅靠旧状态区分平台封禁与 Owner 自行停用。
+
+先增加回归测试，确认修复前四个场景失败，再修复并验证。测试在本机可销毁数据库运行，没有更新 `10.0.29.49` 的部署。
+
+数据库实际版本：SQLite **3.50.4**（Go pure-Go driver）、MySQL **5.7.44**、PostgreSQL **9.6.24**。MySQL 临时库使用 `utf8mb4_unicode_ci`，连接使用 `charset=utf8mb4`；初次使用容器默认 Latin-1 时中文日志测试失败，修正测试库字符集后全量组织行为测试通过。
+
+仓库根目录执行命令（端口对应本次临时容器，数据库均为可删除测试库）：
+
+```sh
+go test ./model ./controller ./middleware ./service ./service/authz ./router -count=1
+TENANCY_TEST_MYSQL_DSN='root@tcp(127.0.0.1:59504)/review_test?charset=utf8mb4&parseTime=true' go test ./model -run TestOrganization -count=1
+TENANCY_TEST_POSTGRES_DSN='host=127.0.0.1 port=59503 user=postgres dbname=review_test sslmode=disable' go test ./model -run TestOrganization -count=1
+ORGANIZATION_API_TEST_MYSQL_DSN='root@tcp(127.0.0.1:59504)/review_api?charset=utf8mb4&parseTime=true' go test ./controller -run 'TestOrganizationPublicAPIBoundary|TestOrganizationLogVisibility' -count=1
+ORGANIZATION_API_TEST_POSTGRES_DSN='host=127.0.0.1 port=59503 user=postgres dbname=review_api sslmode=disable' go test ./controller -run 'TestOrganizationPublicAPIBoundary|TestOrganizationLogVisibility' -count=1
+```
+
+以上均通过。新增平台封禁测试覆盖 Owner 恢复/再次停用/删除均被拒绝、成员访问被拒绝、Key 状态更新、平台恢复，以及 Owner 自行停用后仍可自行恢复。日志响应测试覆盖 Personal、团队、平台 Admin 和 Root。此轮未重跑发布版升级和独立日志库矩阵，历史验证记录见前文。
+
+本机没有 Bun，前端使用已安装的 `web/node_modules/.bin` 执行同一套工具：`tsgo -b`、两份改动文件的 `oxlint -c .oxlintrc.json` 和 `oxfmt` 均通过；`NODE_OPTIONS=--no-experimental-webstorage ./node_modules/.bin/vitest run src/features/dashboard/hooks/__tests__/model-analytics.test.tsx src/features/organizations` 共 **30 项通过**。Node 参数用于避免本机原生 Web Storage 与 jsdom 冲突。
