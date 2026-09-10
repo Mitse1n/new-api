@@ -154,6 +154,11 @@ func ValidateUserToken(key string) (token *Token, err error) {
 		return nil, ErrTokenNotProvided
 	}
 	token, err = GetTokenByKey(key, false)
+	if err == nil && token.OrgId > 0 && common.RedisEnabled {
+		// Organization billing updates token quota in the database transaction,
+		// so the cached balance cannot decide admission (including free models).
+		token, err = GetTokenByKey(key, true)
+	}
 	if err == nil {
 		if token.Status == common.TokenStatusExhausted ||
 			token.Status == common.TokenStatusExpired ||
@@ -170,9 +175,7 @@ func ValidateUserToken(key string) (token *Token, err error) {
 			}
 			return token, ErrTokenInvalid
 		}
-		// Organization Key budgets are checked with the wallet transaction.
-		// A cached quota must not reject a Key after a committed refund.
-		if token.OrgId <= 0 && !token.UnlimitedQuota && token.RemainQuota <= 0 {
+		if !token.UnlimitedQuota && token.RemainQuota <= 0 {
 			if !common.RedisEnabled {
 				token.Status = common.TokenStatusExhausted
 				err := token.SelectUpdate()

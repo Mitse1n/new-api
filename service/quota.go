@@ -436,19 +436,20 @@ func postConsumeQuotaWithResult(relayInfo *relaycommon.RelayInfo, quota int, pre
 		if actual < 0 || actual > int64(common.MaxQuota) {
 			return result, model.ErrOrganizationInput
 		}
-		if err := model.FinalizeOrganizationCharge(relayInfo.OrgId, relayInfo.RequestId, actual, false); err != nil {
+		if relayInfo.Billing == nil {
+			// Free requests skip pre-consumption just like personal requests.
+			if quota == 0 && preConsumedQuota == 0 {
+				return result, nil
+			}
+			return result, errors.New("organization billing session is missing")
+		}
+		// The session commits organization funds and token quota together.
+		if err := relayInfo.Billing.Settle(int(actual)); err != nil {
 			return result, err
 		}
 		result.FundingApplied = true
-		if !relayInfo.IsPlayground {
-			if quota > 0 {
-				err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
-			} else {
-				err = model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, -quota)
-			}
-			result.TokenApplied = err == nil
-		}
-		return result, err
+		result.TokenApplied = !relayInfo.IsPlayground
+		return result, nil
 	}
 
 	// 1) Consume from wallet quota OR subscription item
