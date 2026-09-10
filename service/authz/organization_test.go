@@ -1,6 +1,7 @@
 package authz
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -10,9 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestOrganizationPermissionsKeepRolesAndDomainsSeparate(t *testing.T) {
-	db := newAuthzTestDB(t)
-	require.NoError(t, Init(db))
+func TestOrganizationPermissionsUseFixedMemberRoles(t *testing.T) {
 	for _, test := range []struct {
 		role, resource, action string
 		allowed                bool
@@ -36,19 +35,23 @@ func TestOrganizationPermissionsKeepRolesAndDomainsSeparate(t *testing.T) {
 			assert.Equal(t, test.allowed, CanOrg(1, 10, test.role, Permission{Resource: test.resource, Action: test.action}))
 		})
 	}
-	_, err := currentEnforcer().AddPolicy("org-role:owner", "*", "org.token", "write_all", EffectAllow)
-	require.NoError(t, err)
-	assert.False(t, CanOrg(1, 10, model.OrgRoleOwner, Permission{Resource: "org.token", Action: "write_all"}), "obsolete persisted grants cannot restore access")
 	permission := Permission{Resource: "org.token", Action: "write"}
 	assert.False(t, CanOrg(1, 0, model.OrgRoleOwner, permission))
-	_, err = currentEnforcer().AddPolicy(UserSubject(1), "org:10", permission.Resource, permission.Action, EffectDeny)
-	require.NoError(t, err)
-	assert.False(t, CanOrg(1, 10, model.OrgRoleOwner, permission))
-	assert.True(t, CanOrg(1, 11, model.OrgRoleOwner, permission), "a domain override must not affect another organization")
-	assert.NotContains(t, Capabilities(1, common.RoleRootUser), "org.token")
+	assert.False(t, CanOrg(0, 10, model.OrgRoleOwner, permission))
+	assert.False(t, CanOrg(1, -1, model.OrgRoleOwner, permission))
+	assert.False(t, CanOrg(1, 10, "root", permission))
+	assert.Equal(t, PermissionsMap{
+		"org.member":       {"read": true, "write": false},
+		"org.token":        {"read": true, "write": true},
+		"org.usage":        {"read": true, "read_all": false},
+		"org.billing":      {"read": false, "write": false},
+		"org.subscription": {"purchase": false},
+		"org.settings":     {"read": false, "write": false},
+		"org.lifecycle":    {"write": false},
+	}, OrganizationCapabilities(1, 10, model.OrgRoleMember))
 }
 
-func TestOrganizationDomainMigrationPreservesLegacyDenyOnRestart(t *testing.T) {
+func TestOrganizationInitPreservesPlatformOverridesAcrossRestart(t *testing.T) {
 	db := newAuthzTestDB(t)
 	legacy := model.CasbinRule{Ptype: "p", V0: UserSubject(2), V1: "channel", V2: "read", V3: EffectDeny}
 	require.NoError(t, db.Create(&legacy).Error)
@@ -58,15 +61,17 @@ func TestOrganizationDomainMigrationPreservesLegacyDenyOnRestart(t *testing.T) {
 		assert.True(t, Can(3, common.RoleAdminUser, ChannelRead))
 	}
 	require.NoError(t, db.First(&legacy, legacy.Id).Error)
-	assert.Equal(t, "*", legacy.V1)
-	assert.Equal(t, EffectDeny, legacy.V4)
+	assert.Equal(t, "channel", legacy.V1)
+	assert.Equal(t, "read", legacy.V2)
+	assert.Equal(t, EffectDeny, legacy.V3)
+	assert.Empty(t, legacy.V4)
 }
 
-func TestPlatformPermissionEditingExcludesOrganizationResources(t *testing.T) {
+func TestOrganizationPermissionsAreIndependentOfPlatformOverrides(t *testing.T) {
 	db := newAuthzTestDB(t)
 	require.NoError(t, Init(db))
 	for _, resource := range Catalog() {
-		assert.Equal(t, "platform", resource.Scope)
+		assert.False(t, strings.HasPrefix(resource.Resource, "org."))
 	}
 	input := PermissionsMap{"org.billing": {"write": true}, "channel": {"write": false}}
 	require.NoError(t, SetUserPermissions(42, input))
@@ -76,9 +81,10 @@ func TestPlatformPermissionEditingExcludesOrganizationResources(t *testing.T) {
 	require.NoError(t, ReloadPolicy())
 	assert.NotContains(t, ExplicitUserOverrides(43), "org.billing")
 	var organizationOverrides int64
-	require.NoError(t, db.Model(&model.CasbinRule{}).Where("v0 IN ? AND v2 = ?", []string{UserSubject(42), UserSubject(43)}, "org.billing").Count(&organizationOverrides).Error)
+	require.NoError(t, db.Model(&model.CasbinRule{}).Where("v0 IN ? AND v1 = ?", []string{UserSubject(42), UserSubject(43)}, "org.billing").Count(&organizationOverrides).Error)
 	assert.Zero(t, organizationOverrides, "platform writes must not persist organization permissions")
-	_, err := currentEnforcer().AddPolicy(UserSubject(44), "*", "org.billing", "write", EffectAllow)
-	require.NoError(t, err)
-	assert.NotContains(t, ExplicitUserOverrides(44), "org.billing", "obsolete platform overrides must not appear in the editor")
+	assert.NotContains(t, Capabilities(1, common.RoleRootUser), "org.token")
+	assert.False(t, CanOrg(42, 10, model.OrgRoleMember, Permission{Resource: "org.billing", Action: "write"}))
+	require.NoError(t, SetUserPermissions(43, PermissionsMap{"org.billing": {"write": false}}))
+	assert.True(t, CanOrg(43, 10, model.OrgRoleAdmin, Permission{Resource: "org.billing", Action: "write"}))
 }

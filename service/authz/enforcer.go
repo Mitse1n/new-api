@@ -18,23 +18,20 @@ var (
 
 const modelText = `
 [request_definition]
-r = sub, dom, obj, act
+r = sub, obj, act
 
 [policy_definition]
-p = sub, dom, obj, act, eft
+p = sub, obj, act, eft
 
 [policy_effect]
 e = some(where (p.eft == allow))
 
 [matchers]
-m = r.sub == p.sub && (r.dom == p.dom || p.dom == "*") && r.obj == p.obj && r.act == p.act && p.eft == "allow"
+m = r.sub == p.sub && r.obj == p.obj && r.act == p.act && p.eft == "allow"
 `
 
 func Init(db *gorm.DB) error {
 	if common.IsMasterNode {
-		if err := migratePolicyDomains(db); err != nil {
-			return err
-		}
 		if err := seedBuiltInRoles(db); err != nil {
 			return err
 		}

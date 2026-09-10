@@ -274,11 +274,11 @@ func TestTaskPluginBindIsRootOnlyUntilGranted(t *testing.T) {
 
 	enforcer := currentEnforcer()
 	require.NotNil(t, enforcer)
-	_, err := enforcer.AddPolicy(RoleSubject(BuiltInRoleAdmin), "*", ResourceTaskPlugin, ActionBind, EffectAllow)
+	_, err := enforcer.AddPolicy(RoleSubject(BuiltInRoleAdmin), ResourceTaskPlugin, ActionBind, EffectAllow)
 	require.NoError(t, err)
 	assert.True(t, Can(2, common.RoleAdminUser, TaskPluginBind))
 
-	_, err = enforcer.RemovePolicy(RoleSubject(BuiltInRoleAdmin), "*", ResourceTaskPlugin, ActionBind, EffectAllow)
+	_, err = enforcer.RemovePolicy(RoleSubject(BuiltInRoleAdmin), ResourceTaskPlugin, ActionBind, EffectAllow)
 	require.NoError(t, err)
 	assert.False(t, Can(2, common.RoleAdminUser, TaskPluginBind))
 }

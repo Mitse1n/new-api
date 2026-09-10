@@ -178,7 +178,7 @@ func AcceptOrganizationTransfer(orgID, actorID int) error {
 }
 
 // CleanupDeletedOrganizations is restartable: a tombstone is retained until both
-// databases and domain policies have been cleaned. Every deletion stays scoped.
+// databases have been cleaned. Every deletion stays scoped.
 func CleanupDeletedOrganizations() error {
 	var orgs []Organization
 	if err := DB.Unscoped().Where("status = ? AND deleted_at IS NOT NULL", OrganizationDeleting).Limit(10).Find(&orgs).Error; err != nil {
@@ -197,9 +197,6 @@ func CleanupDeletedOrganizations() error {
 				if err := tx.Unscoped().Scopes(OrgScope(org.Id)).Delete(resource).Error; err != nil {
 					return err
 				}
-			}
-			if err := tx.Where("v1 = ?", fmt.Sprintf("org:%d", org.Id)).Delete(&CasbinRule{}).Error; err != nil {
-				return err
 			}
 			return tx.Unscoped().Where("id = ? AND status = ?", org.Id, OrganizationDeleting).Delete(&Organization{}).Error
 		}); err != nil {

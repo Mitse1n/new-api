@@ -270,7 +270,7 @@ func TestOrganizationQuotaAggregationPreservesLegacyPersonalBucket(t *testing.T)
 
 func TestDeletingOrganizationPreservesPlatformRedemptionCodes(t *testing.T) {
 	db, org, _ := organizationBillingFixture(t)
-	require.NoError(t, db.AutoMigrate(&Redemption{}, &CasbinRule{}))
+	require.NoError(t, db.AutoMigrate(&Redemption{}))
 	code := Redemption{Key: "global-code", Name: "global", Quota: 100, Status: common.RedemptionCodeStatusEnabled}
 	require.NoError(t, db.Create(&code).Error)
 	require.NoError(t, db.Model(org).Update("status", OrganizationDeleting).Error)

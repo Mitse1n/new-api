@@ -11,7 +11,6 @@ type ActionDefinition struct {
 
 // ResourceDefinition describes a resource and the actions it exposes.
 type ResourceDefinition struct {
-	Scope    string             `json:"scope"`
 	Resource string             `json:"resource"`
 	LabelKey string             `json:"label_key"`
 	Actions  []ActionDefinition `json:"actions"`
@@ -21,21 +20,14 @@ var registry []ResourceDefinition
 
 // RegisterResource adds a resource definition to the permission registry.
 func RegisterResource(resource ResourceDefinition) {
-	if resource.Scope == "" {
-		resource.Scope = "platform"
-	}
 	registry = append(registry, resource)
 }
 
-// Catalog returns the platform resources editable through platform authorization.
+// Catalog returns a copy of the registered resource definitions.
 func Catalog() []ResourceDefinition {
 	result := make([]ResourceDefinition, 0, len(registry))
 	for _, resource := range registry {
-		if resource.Scope != "platform" {
-			continue
-		}
 		result = append(result, ResourceDefinition{
-			Scope:    resource.Scope,
 			Resource: resource.Resource,
 			LabelKey: resource.LabelKey,
 			Actions:  append([]ActionDefinition(nil), resource.Actions...),
@@ -110,15 +102,6 @@ func isKnownPermission(permission Permission) bool {
 			if action.Action == permission.Action {
 				return true
 			}
-		}
-	}
-	return false
-}
-
-func isPlatformResource(resource string) bool {
-	for _, known := range registry {
-		if known.Resource == resource {
-			return known.Scope == "platform"
 		}
 	}
 	return false
