@@ -69,14 +69,14 @@ func TestAccountAndTeamResourceIsolation(t *testing.T) {
 	require.NoError(t, db.Create(&keys).Error)
 	for _, test := range []struct {
 		name  string
-		scope OrganizationResourceScope
+		scope ResourceScope
 		names []string
 	}{
-		{"account", OrganizationResourceScope{UserID: users[0].Id}, []string{"alice"}},
-		{"account cannot widen", OrganizationResourceScope{UserID: users[0].Id, AllMembers: true}, []string{"alice"}},
-		{"team", OrganizationResourceScope{OrgID: org.Id, UserID: users[0].Id}, []string{"team"}},
-		{"missing user", OrganizationResourceScope{AllMembers: true}, []string{}},
-		{"negative organization", OrganizationResourceScope{OrgID: -1, UserID: users[0].Id}, []string{}},
+		{"account", ResourceScope{UserID: users[0].Id}, []string{"alice"}},
+		{"account cannot widen", ResourceScope{UserID: users[0].Id, AllMembers: true}, []string{"alice"}},
+		{"team", ResourceScope{OrgID: org.Id, UserID: users[0].Id}, []string{"team"}},
+		{"missing user", ResourceScope{AllMembers: true}, []string{}},
+		{"negative organization", ResourceScope{OrgID: -1, UserID: users[0].Id}, []string{}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var names []string

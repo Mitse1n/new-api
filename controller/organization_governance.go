@@ -41,7 +41,7 @@ func GetOrganizationSummary(c *gin.Context) {
 		return
 	}
 	var memberCount, keyCount, requestCount int64
-	if err := organizationUsageScope(c).Apply(model.LOG_DB.Model(&model.Log{})).Where("type = ?", model.LogTypeConsume).Count(&requestCount).Error; err != nil {
+	if err := usageScope(c).Apply(model.LOG_DB.Model(&model.Log{})).Where("type = ?", model.LogTypeConsume).Count(&requestCount).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -49,7 +49,7 @@ func GetOrganizationSummary(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if err := tokenOrganizationScope(c).Apply(model.DB.Model(&model.Token{})).Count(&keyCount).Error; err != nil {
+	if err := tokenScope(c).Apply(model.DB.Model(&model.Token{})).Count(&keyCount).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}

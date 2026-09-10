@@ -18,7 +18,7 @@ func GetAccountSummary(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	scope := model.OrganizationResourceScope{UserID: userID}
+	scope := model.ResourceScope{UserID: userID}
 	var subscriptions []model.UserSubscription
 	if err := scope.Apply(model.DB).Order("id desc").Find(&subscriptions).Error; err != nil {
 		common.ApiError(c, err)

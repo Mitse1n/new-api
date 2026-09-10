@@ -340,7 +340,7 @@ func Register(c *gin.Context) {
 		if setting.DefaultUseAutoGroup {
 			token.Group = "auto"
 		}
-		if err := model.InsertOrganizationToken(&token); err != nil {
+		if err := model.InsertScopedToken(&token); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgCreateDefaultTokenErr)
 			return
 		}

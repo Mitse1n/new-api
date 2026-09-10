@@ -12,7 +12,7 @@ import (
 func TestOrganizationPlatformSuspensionRequiresPlatformRestore(t *testing.T) {
 	db, org, users := organizationBillingFixture(t)
 	token := Token{OrgId: org.Id, UserId: users[0].Id, Key: "suspended-owner-key", Status: common.TokenStatusEnabled, ExpiredTime: -1, UnlimitedQuota: true}
-	require.NoError(t, InsertOrganizationToken(&token))
+	require.NoError(t, InsertScopedToken(&token))
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 		return PlatformChangeOrganizationStatusTx(tx, org.Id, 999, OrganizationDisabled, "platform suspension")
 	}))

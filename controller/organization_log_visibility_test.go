@@ -80,7 +80,7 @@ func TestOrganizationLogVisibility(t *testing.T) {
 				c.Params = gin.Params{{Key: "org_id", Value: "10"}, {Key: "resource", Value: "logs"}}
 				PlatformOrganizationResources(c)
 			} else {
-				GetOrganizationLogs(c)
+				GetScopedLogs(c)
 			}
 			require.Equal(t, 200, response.Code)
 			var payload struct {

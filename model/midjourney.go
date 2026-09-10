@@ -39,7 +39,7 @@ type TaskQueryParams struct {
 	EndTimestamp   string
 }
 
-func GetAllUserTask(userId int, startIdx int, num int, queryParams TaskQueryParams, scopes ...OrganizationResourceScope) []*Midjourney {
+func GetAllUserTask(userId int, startIdx int, num int, queryParams TaskQueryParams, scopes ...ResourceScope) []*Midjourney {
 	var tasks []*Midjourney
 	var err error
 
@@ -138,7 +138,7 @@ func GetByMJId(userId int, mjId string, orgIDs ...int) *Midjourney {
 	var err error
 	query := DB
 	if len(orgIDs) > 0 {
-		query = (OrganizationResourceScope{OrgID: orgIDs[0], UserID: userId}).Apply(query)
+		query = (ResourceScope{OrgID: orgIDs[0], UserID: userId}).Apply(query)
 	}
 	err = query.Where("user_id = ? and mj_id = ?", userId, mjId).First(&mj).Error
 	if err != nil {
@@ -152,7 +152,7 @@ func GetByMJIds(userId int, mjIds []string, orgIDs ...int) []*Midjourney {
 	var err error
 	query := DB
 	if len(orgIDs) > 0 {
-		query = (OrganizationResourceScope{OrgID: orgIDs[0], UserID: userId}).Apply(query)
+		query = (ResourceScope{OrgID: orgIDs[0], UserID: userId}).Apply(query)
 	}
 	err = query.Where("user_id = ? and mj_id in (?)", userId, mjIds).Find(&mj).Error
 	if err != nil {
@@ -246,7 +246,7 @@ func CountAllTasks(queryParams TaskQueryParams) int64 {
 }
 
 // CountAllUserTask returns total midjourney tasks for user
-func CountAllUserTask(userId int, queryParams TaskQueryParams, scopes ...OrganizationResourceScope) int64 {
+func CountAllUserTask(userId int, queryParams TaskQueryParams, scopes ...ResourceScope) int64 {
 	var total int64
 	query := DB.Model(&Midjourney{}).Where("user_id = ?", userId)
 	if len(scopes) > 0 {

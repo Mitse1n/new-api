@@ -4,7 +4,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 )
 
-func GetOrganizationTask(scope OrganizationResourceScope, taskID string) (*Task, bool, error) {
+func GetScopedTask(scope ResourceScope, taskID string) (*Task, bool, error) {
 	var tasks []Task
 	err := scope.Apply(DB).Where("task_id = ?", taskID).Limit(2).Find(&tasks).Error
 	if err != nil || len(tasks) != 1 {
@@ -13,14 +13,14 @@ func GetOrganizationTask(scope OrganizationResourceScope, taskID string) (*Task,
 	return &tasks[0], true, nil
 }
 
-func GetOrganizationQuotaDates(scope OrganizationResourceScope, start, end int64) ([]*QuotaData, error) {
+func GetScopedQuotaDates(scope ResourceScope, start, end int64) ([]*QuotaData, error) {
 	rows := make([]*QuotaData, 0)
 	err := scope.Apply(DB.Model(&QuotaData{})).Where("created_at >= ? AND created_at <= ?", start, end).
 		Select("user_id, username, model_name, created_at, SUM(count) AS count, SUM(quota) AS quota, SUM(token_used) AS token_used").Group("user_id, username, model_name, created_at").Order("created_at").Find(&rows).Error
 	return rows, err
 }
 
-func GetOrganizationFlowQuotaData(scope OrganizationResourceScope, start, end int64) ([]*FlowQuotaData, error) {
+func GetScopedFlowQuotaData(scope ResourceScope, start, end int64) ([]*FlowQuotaData, error) {
 	rows := make([]*FlowQuotaData, 0)
 	err := scope.Apply(flowQuotaBaseQuery(start, end)).
 		Select("user_id, username, token_id, use_group, channel_id, model_name, SUM(count) AS count, SUM(quota) AS quota, SUM(token_used) AS token_used").
@@ -42,7 +42,7 @@ func GetOrganizationFlowQuotaData(scope OrganizationResourceScope, start, end in
 	return rows, nil
 }
 
-func GetOrganizationTopUps(scope OrganizationResourceScope, keyword string, page *common.PageInfo) ([]*TopUp, int64, error) {
+func GetScopedTopUps(scope ResourceScope, keyword string, page *common.PageInfo) ([]*TopUp, int64, error) {
 	rows := make([]*TopUp, 0)
 	query := scope.Apply(DB.Model(&TopUp{}))
 	if keyword != "" {

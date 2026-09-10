@@ -38,28 +38,6 @@ func GetAllLogs(c *gin.Context) {
 	return
 }
 
-func GetUserLogs(c *gin.Context) {
-	pageInfo := common.GetPageQuery(c)
-	userId := c.GetInt("id")
-	logType, _ := strconv.Atoi(c.Query("type"))
-	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
-	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
-	group := c.Query("group")
-	requestId := c.Query("request_id")
-	upstreamRequestId := c.Query("upstream_request_id")
-	logs, total, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, upstreamRequestId)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(logs)
-	common.ApiSuccess(c, pageInfo)
-	return
-}
-
 // Deprecated: SearchAllLogs 已废弃，前端未使用该接口。
 func SearchAllLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
@@ -122,34 +100,6 @@ func GetLogsStat(c *gin.Context) {
 			"quota": stat.Quota,
 			"rpm":   stat.Rpm,
 			"tpm":   stat.Tpm,
-		},
-	})
-	return
-}
-
-func GetLogsSelfStat(c *gin.Context) {
-	username := c.GetString("username")
-	logType, _ := strconv.Atoi(c.Query("type"))
-	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
-	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
-	channel, _ := strconv.Atoi(c.Query("channel"))
-	group := c.Query("group")
-	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	//tokenNum := model.SumUsedToken(logType, startTimestamp, endTimestamp, modelName, username, tokenName)
-	c.JSON(200, gin.H{
-		"success": true,
-		"message": "",
-		"data": gin.H{
-			"quota": quotaNum.Quota,
-			"rpm":   quotaNum.Rpm,
-			"tpm":   quotaNum.Tpm,
-			//"token": tokenNum,
 		},
 	})
 	return

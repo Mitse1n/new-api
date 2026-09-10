@@ -567,7 +567,7 @@ func ValidateAccountSubscriptionPlan(tx *gorm.DB, userID int, plan *Subscription
 	if plan.MaxPurchasePerUser <= 0 {
 		return nil
 	}
-	scope := OrganizationResourceScope{UserID: userID}
+	scope := ResourceScope{UserID: userID}
 	var purchased, pending int64
 	if err := scope.Apply(tx.Model(&UserSubscription{})).Where("plan_id = ?", plan.Id).Count(&purchased).Error; err != nil {
 		return err
@@ -1490,7 +1490,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 		}
 		for _, candidate := range subs {
 			sub := candidate
-			plan, err := GetOrganizationSubscriptionPlan(tx, &sub)
+			plan, err := GetPurchasedSubscriptionPlan(tx, &sub)
 			if err != nil {
 				return err
 			}
@@ -1590,7 +1590,7 @@ func ResetDueSubscriptions(limit int) (int, error) {
 	resetCount := 0
 	for _, sub := range subs {
 		subCopy := sub
-		plan, err := GetOrganizationSubscriptionPlan(nil, &sub)
+		plan, err := GetPurchasedSubscriptionPlan(nil, &sub)
 		if err != nil || plan == nil {
 			continue
 		}
@@ -1641,7 +1641,7 @@ func GetSubscriptionPlanInfoByUserSubscriptionId(userSubscriptionId int) (*Subsc
 	if err := DB.Where("id = ?", userSubscriptionId).First(&sub).Error; err != nil {
 		return nil, err
 	}
-	plan, err := GetOrganizationSubscriptionPlan(nil, &sub)
+	plan, err := GetPurchasedSubscriptionPlan(nil, &sub)
 	if err != nil {
 		return nil, err
 	}
@@ -1679,4 +1679,17 @@ func postConsumeUserSubscriptionDeltaTx(tx *gorm.DB, userSubscriptionID int, del
 		return fmt.Errorf("subscription used exceeds total, used=%d total=%d", newUsed, sub.AmountTotal)
 	}
 	return tx.Model(&sub).Update("amount_used", newUsed).Error
+}
+
+// GetPurchasedSubscriptionPlan preserves purchased terms after edits or removal
+// of the catalog plan. Legacy subscriptions retain their existing plan semantics.
+func GetPurchasedSubscriptionPlan(tx *gorm.DB, sub *UserSubscription) (*SubscriptionPlan, error) {
+	if sub.PlanSnapshot == "" {
+		return getSubscriptionPlanByIdTx(tx, sub.PlanId)
+	}
+	plan := &SubscriptionPlan{}
+	if err := common.UnmarshalJsonStr(sub.PlanSnapshot, plan); err != nil {
+		return nil, err
+	}
+	return plan, nil
 }

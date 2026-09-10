@@ -65,7 +65,7 @@ func organizationSeatLimit(tx *gorm.DB, orgID int) (int, error) {
 	}
 	max := 0
 	for _, sub := range subs {
-		plan, err := GetOrganizationSubscriptionPlan(tx, &sub)
+		plan, err := GetPurchasedSubscriptionPlan(tx, &sub)
 		if err != nil {
 			return 0, err
 		}

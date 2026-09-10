@@ -222,3 +222,19 @@ go test ./relay ./controller ./service ./router -count=1
 MJ_IMAGE_TEST_MYSQL_DSN='root@tcp(127.0.0.1:62153)/mj_test?charset=utf8mb4&parseTime=true' go test ./relay -run TestMidjourneyImagesKeepPublicLinks -count=1
 MJ_IMAGE_TEST_POSTGRES_DSN='host=127.0.0.1 port=62154 user=postgres dbname=mj_test sslmode=disable' go test ./relay -run TestMidjourneyImagesKeepPublicLinks -count=1
 ```
+
+## 个人与组织共享资源重构（2026-09-10）
+
+将共享查询的 `OrganizationResourceScope` / `OrganizationTokenScope` 改为 `ResourceScope` / `TokenScope`，共享 API 使用 `Scoped*` 命名。`resource_scope.go` 定义个人或单一组织的读范围；`scoped_resources.go`、`scoped_tokens.go` 承载共享资源操作；`organization_tokens.go` 仅保留组织状态投影和成员 Key 撤销。已购套餐读取改名 `GetPurchasedSubscriptionPlan`，移回通用订阅模块。
+
+Controller 的共享用量入口改名 `GetScopedLogs` / `GetScopedLogStats`，个人作用域直接返回，不经过组织权限计算。日志响应仍明确区分个人 `FormatUserLogs` 与组织 `FormatOrganizationLogs`。删除两个已被作用域入口替代、没有路由调用的旧日志处理器，以及成员 Key 撤销的单次调用转发 helper。HTTP 路由、字段、查询条件、事务和计费行为保持不变，没有 schema 变更。
+
+复用现有个人生命周期、组织隔离、权限边界和日志脱敏回归测试；本机 SQLite **3.50.4**、MySQL **5.7.44**、PostgreSQL **9.6.24** 均通过。MySQL 测试库使用 `utf8mb4_unicode_ci`。以下外部 DSN 均为本次创建并删除的独立临时库，没有更新远端部署：
+
+```sh
+go test ./model ./controller ./relay ./middleware ./service ./service/authz ./router -count=1
+TENANCY_TEST_MYSQL_DSN='root@tcp(127.0.0.1:62988)/scope_test?charset=utf8mb4&parseTime=true' go test ./model -run 'TestOrganization|TestAccount' -count=1
+TENANCY_TEST_POSTGRES_DSN='host=127.0.0.1 port=62987 user=postgres dbname=scope_test sslmode=disable' go test ./model -run 'TestOrganization|TestAccount' -count=1
+ORGANIZATION_API_TEST_MYSQL_DSN='root@tcp(127.0.0.1:62988)/scope_api?charset=utf8mb4&parseTime=true' go test ./controller -run 'TestOrganizationPublicAPIBoundary|TestOrganizationLogVisibility' -count=1
+ORGANIZATION_API_TEST_POSTGRES_DSN='host=127.0.0.1 port=62987 user=postgres dbname=scope_api sslmode=disable' go test ./controller -run 'TestOrganizationPublicAPIBoundary|TestOrganizationLogVisibility' -count=1
+```

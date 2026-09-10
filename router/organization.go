@@ -22,8 +22,8 @@ func setOrganizationRoutes(api *gin.RouterGroup) {
 	organizations.POST("/invites/:invite_id/decline", middleware.CriticalRateLimit(), controller.DeclineOrganizationInvite)
 	account := api.Group("/account", middleware.UserAuth())
 	account.GET("/summary", controller.GetAccountSummary)
-	account.GET("/logs", controller.GetOrganizationLogs)
-	account.GET("/logs/stat", controller.GetOrganizationLogStats)
+	account.GET("/logs", controller.GetScopedLogs)
+	account.GET("/logs/stat", controller.GetScopedLogStats)
 
 	org := api.Group("/org", middleware.UserAuth(), middleware.OrganizationContext(), middleware.RequireTeamOrganization())
 	org.GET("/context", controller.GetOrganizationContext)
@@ -40,7 +40,7 @@ func setOrganizationRoutes(api *gin.RouterGroup) {
 	org.POST("/invites", middleware.RequireOrgPermission("org.member", "write"), middleware.CriticalRateLimit(), controller.InviteOrganizationMember)
 	org.POST("/invites/:invite_id/resend", middleware.RequireOrgPermission("org.member", "write"), middleware.CriticalRateLimit(), controller.ResendOrganizationInvite)
 	org.DELETE("/invites/:invite_id", middleware.RequireOrgPermission("org.member", "write"), controller.RevokeOrganizationInvite)
-	org.GET("/logs", middleware.RequireOrgPermission("org.usage", "read"), controller.GetOrganizationLogs)
-	org.GET("/logs/stat", middleware.RequireOrgPermission("org.usage", "read"), controller.GetOrganizationLogStats)
+	org.GET("/logs", middleware.RequireOrgPermission("org.usage", "read"), controller.GetScopedLogs)
+	org.GET("/logs/stat", middleware.RequireOrgPermission("org.usage", "read"), controller.GetScopedLogStats)
 	org.GET("/audit", middleware.RequireOrgPermission("org.usage", "read_all"), controller.GetOrganizationAudit)
 }

@@ -149,13 +149,13 @@ func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) boo
 	return true
 }
 
-func tokenOrganizationScope(c *gin.Context) model.OrganizationTokenScope {
-	return model.OrganizationTokenScope{OrgID: c.GetInt("org_id"), UserID: c.GetInt("id")}
+func tokenScope(c *gin.Context) model.TokenScope {
+	return model.TokenScope{OrgID: c.GetInt("org_id"), UserID: c.GetInt("id")}
 }
 
 func GetAllTokens(c *gin.Context) {
 	page := common.GetPageQuery(c)
-	tokens, total, err := model.ListOrganizationTokens(tokenOrganizationScope(c), c.Query("keyword"), c.Query("token"), page.GetStartIdx(), page.GetPageSize())
+	tokens, total, err := model.ListScopedTokens(tokenScope(c), c.Query("keyword"), c.Query("token"), page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -173,7 +173,7 @@ func GetToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	token, err := model.GetOrganizationToken(tokenOrganizationScope(c), id)
+	token, err := model.GetScopedToken(tokenScope(c), id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -203,7 +203,7 @@ func GetTokenKey(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	token, err := model.GetOrganizationToken(tokenOrganizationScope(c), id)
+	token, err := model.GetScopedToken(tokenScope(c), id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -351,7 +351,7 @@ func AddToken(c *gin.Context) {
 		CrossGroupRetry:    token.CrossGroupRetry,
 		AutoGroups:         token.AutoGroups,
 	}
-	err = model.InsertOrganizationToken(&cleanToken)
+	err = model.InsertScopedToken(&cleanToken)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -369,7 +369,7 @@ func AddToken(c *gin.Context) {
 
 func DeleteToken(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	_, err := model.DeleteOrganizationTokens(tokenOrganizationScope(c), []int{id})
+	_, err := model.DeleteScopedTokens(tokenScope(c), []int{id})
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -404,7 +404,7 @@ func UpdateToken(c *gin.Context) {
 			return
 		}
 	}
-	cleanToken, err := model.GetOrganizationToken(tokenOrganizationScope(c), token.Id)
+	cleanToken, err := model.GetScopedToken(tokenScope(c), token.Id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -441,7 +441,7 @@ func UpdateToken(c *gin.Context) {
 			}
 		}
 	}
-	err = model.UpdateOrganizationToken(tokenOrganizationScope(c), cleanToken, statusOnly != "")
+	err = model.UpdateScopedToken(tokenScope(c), cleanToken, statusOnly != "")
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -463,7 +463,7 @@ func DeleteTokenBatch(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	count, err := model.DeleteOrganizationTokens(tokenOrganizationScope(c), tokenBatch.Ids)
+	count, err := model.DeleteScopedTokens(tokenScope(c), tokenBatch.Ids)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -490,7 +490,7 @@ func GetTokenKeysBatch(c *gin.Context) {
 		return
 	}
 	var tokens []model.Token
-	if err := model.DB.Scopes(tokenOrganizationScope(c).Apply).Where("id IN ?", batch.Ids).Find(&tokens).Error; err != nil {
+	if err := model.DB.Scopes(tokenScope(c).Apply).Where("id IN ?", batch.Ids).Find(&tokens).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}

@@ -71,7 +71,7 @@ func GetUserQuotaDates(c *gin.Context) {
 		})
 		return
 	}
-	dates, err := model.GetOrganizationQuotaDates(organizationUsageScope(c), startTimestamp, endTimestamp)
+	dates, err := model.GetScopedQuotaDates(usageScope(c), startTimestamp, endTimestamp)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -115,7 +115,7 @@ func GetUserFlowQuotaDates(c *gin.Context) {
 		})
 		return
 	}
-	dates, err := model.GetOrganizationFlowQuotaData(organizationUsageScope(c), startTimestamp, endTimestamp)
+	dates, err := model.GetScopedFlowQuotaData(usageScope(c), startTimestamp, endTimestamp)
 	if err != nil {
 		common.ApiError(c, err)
 		return

@@ -268,7 +268,7 @@ func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) 
 	return t
 }
 
-func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQueryParams, scopes ...OrganizationResourceScope) []*Task {
+func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQueryParams, scopes ...ResourceScope) []*Task {
 	var tasks []*Task
 	var err error
 
@@ -446,7 +446,7 @@ func GetByTaskIdsForPlatforms(userID int, platforms []constant.TaskPlatform, tas
 	var tasks []*Task
 	query := DB
 	if len(orgIDs) > 0 {
-		query = (OrganizationResourceScope{OrgID: orgIDs[0], UserID: userID}).Apply(query)
+		query = (ResourceScope{OrgID: orgIDs[0], UserID: userID}).Apply(query)
 	}
 	err := query.
 		Where("user_id = ? AND platform IN ? AND task_id IN ?", userID, platforms, taskIDs).
@@ -603,7 +603,7 @@ func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 }
 
 // TaskCountAllUserTask returns total tasks for given user
-func TaskCountAllUserTask(userId int, queryParams SyncTaskQueryParams, scopes ...OrganizationResourceScope) int64 {
+func TaskCountAllUserTask(userId int, queryParams SyncTaskQueryParams, scopes ...ResourceScope) int64 {
 	var total int64
 	query := DB.Model(&Task{}).Where("user_id = ?", userId)
 	if len(scopes) > 0 {

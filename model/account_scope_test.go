@@ -13,17 +13,17 @@ func TestAccountTokenLifecycleDoesNotRequireOrganization(t *testing.T) {
 	users := []User{{Username: "account", AffCode: "account"}, {Username: "other", AffCode: "other"}}
 	require.NoError(t, db.Create(&users).Error)
 	token := Token{UserId: users[0].Id, Key: "account-lifecycle", Name: "before", Status: common.TokenStatusEnabled}
-	require.NoError(t, InsertOrganizationToken(&token))
-	scope := OrganizationTokenScope{UserID: users[0].Id}
+	require.NoError(t, InsertScopedToken(&token))
+	scope := TokenScope{UserID: users[0].Id}
 	token.Name = "after"
-	require.NoError(t, UpdateOrganizationToken(scope, &token, false))
-	saved, err := GetOrganizationToken(scope, token.Id)
+	require.NoError(t, UpdateScopedToken(scope, &token, false))
+	saved, err := GetScopedToken(scope, token.Id)
 	require.NoError(t, err)
 	assert.Equal(t, "after", saved.Name)
 	assert.Zero(t, saved.OrgId)
-	_, err = DeleteOrganizationTokens(OrganizationTokenScope{UserID: users[1].Id}, []int{token.Id})
+	_, err = DeleteScopedTokens(TokenScope{UserID: users[1].Id}, []int{token.Id})
 	require.Error(t, err)
-	count, err := DeleteOrganizationTokens(scope, []int{token.Id})
+	count, err := DeleteScopedTokens(scope, []int{token.Id})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), count)
 	var organizations, memberships, audits int64
@@ -50,7 +50,7 @@ func TestAccountSubscriptionCannotSpendTeamAllowance(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, PurchaseSubscriptionWithBalance(user.Id, plan.Id))
 	var personal UserSubscription
-	require.NoError(t, (OrganizationResourceScope{UserID: user.Id}).Apply(db).First(&personal).Error)
+	require.NoError(t, (ResourceScope{UserID: user.Id}).Apply(db).First(&personal).Error)
 	assert.NotEmpty(t, personal.PlanSnapshot)
 	count, err := CountUserSubscriptionsByPlan(user.Id, plan.Id)
 	require.NoError(t, err)

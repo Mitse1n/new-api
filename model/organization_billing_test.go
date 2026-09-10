@@ -109,7 +109,7 @@ func TestOrganizationSubscriptionSnapshotAndRefundAcrossReset(t *testing.T) {
 	assert.Equal(t, sub.Id, receipt.SubscriptionId)
 	// Editing/removing the catalog cannot alter purchased terms or break settlement.
 	require.NoError(t, db.Delete(&plan).Error)
-	snapshot, err := GetOrganizationSubscriptionPlan(db, sub)
+	snapshot, err := GetPurchasedSubscriptionPlan(db, sub)
 	require.NoError(t, err)
 	assert.Equal(t, 2, snapshot.MaxMembers)
 	require.NoError(t, db.Model(sub).Updates(map[string]interface{}{"last_reset_time": sub.LastResetTime + 86400, "amount_used": 50}).Error)

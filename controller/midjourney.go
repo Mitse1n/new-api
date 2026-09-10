@@ -314,8 +314,8 @@ func GetUserMidjourney(c *gin.Context) {
 		EndTimestamp:   c.Query("end_timestamp"),
 	}
 
-	items := model.GetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams, organizationUsageScope(c))
-	total := model.CountAllUserTask(userId, queryParams, organizationUsageScope(c))
+	items := model.GetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams, usageScope(c))
+	total := model.CountAllUserTask(userId, queryParams, usageScope(c))
 
 	if setting.MjForwardUrlEnabled {
 		for i, midjourney := range items {

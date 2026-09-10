@@ -51,8 +51,8 @@ func TestOrganizationMemberRevocationDisablesOnlyTheirKeysAndPreservesSettlement
 			require.NoError(t, UpdateOrganizationMember(org.Id, users[0].Id, users[1].Id, OrgRoleMember, OrganizationActive, 200))
 			_, err = ValidateUserToken(keys[0].Key)
 			assert.ErrorIs(t, err, ErrTokenInvalid, "restoring membership must not revive old keys")
-			scope := OrganizationTokenScope{OrgID: org.Id, UserID: users[1].Id}
-			require.NoError(t, UpdateOrganizationToken(scope, &keys[0], true))
+			scope := TokenScope{OrgID: org.Id, UserID: users[1].Id}
+			require.NoError(t, UpdateScopedToken(scope, &keys[0], true))
 			_, err = ValidateUserToken(keys[0].Key)
 			require.NoError(t, err, "active creator can explicitly enable their key")
 		})

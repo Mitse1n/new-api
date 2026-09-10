@@ -63,7 +63,7 @@ func GetSubscriptionSelf(c *gin.Context) {
 	pref := common.NormalizeBillingPreference(settingMap.BillingPreference)
 
 	var subs []model.UserSubscription
-	if err := (model.OrganizationResourceScope{OrgID: c.GetInt("org_id"), UserID: userId, AllMembers: c.GetInt("org_id") > 0}).Apply(model.DB).Order("id desc").Find(&subs).Error; err != nil {
+	if err := (model.ResourceScope{OrgID: c.GetInt("org_id"), UserID: userId, AllMembers: c.GetInt("org_id") > 0}).Apply(model.DB).Order("id desc").Find(&subs).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}

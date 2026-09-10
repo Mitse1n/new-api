@@ -52,7 +52,7 @@ func TestOrganizationAPIsEnforceScopeAndFreshMembership(t *testing.T) {
 	r.PUT("/tokens", middleware.RequireOrgPermission("org.token", "write"), UpdateToken)
 	r.DELETE("/tokens/:id", middleware.RequireOrgPermission("org.token", "write"), DeleteToken)
 	r.POST("/tokens/batch", middleware.RequireOrgPermission("org.token", "write"), DeleteTokenBatch)
-	r.GET("/logs", middleware.RequireOrgPermission("org.usage", "read"), GetOrganizationLogs)
+	r.GET("/logs", middleware.RequireOrgPermission("org.usage", "read"), GetScopedLogs)
 	r.GET("/task/:key", middleware.RequireOrgPermission("org.usage", "read"), GetTask)
 	for _, test := range []struct {
 		user            int

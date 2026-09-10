@@ -192,16 +192,3 @@ func creditOrganizationTopUp(tx *gorm.DB, orgID int, quota int) error {
 	}
 	return nil
 }
-
-// GetOrganizationSubscriptionPlan preserves purchased terms after edits or removal
-// of the catalog plan. Legacy subscriptions retain their existing plan semantics.
-func GetOrganizationSubscriptionPlan(tx *gorm.DB, sub *UserSubscription) (*SubscriptionPlan, error) {
-	if sub.PlanSnapshot == "" {
-		return getSubscriptionPlanByIdTx(tx, sub.PlanId)
-	}
-	plan := &SubscriptionPlan{}
-	if err := common.UnmarshalJsonStr(sub.PlanSnapshot, plan); err != nil {
-		return nil, err
-	}
-	return plan, nil
-}

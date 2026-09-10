@@ -97,7 +97,7 @@ func reserveOrganizationCharge(orgID, userID, tokenID int, requestID string, amo
 			return err
 		}
 		for i := range subs {
-			plan, err := GetOrganizationSubscriptionPlan(tx, &subs[i])
+			plan, err := GetPurchasedSubscriptionPlan(tx, &subs[i])
 			if err != nil {
 				return err
 			}

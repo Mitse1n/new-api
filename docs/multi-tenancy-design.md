@@ -491,8 +491,8 @@ casbin 升到 `sub, dom, obj, act`，存量策略全部写 `dom = "*"`，语义�
 
 ## 已确认的成员密钥隔离规则（2026-09-04）
 
-- 所有组织角色均只管理自己的 API Key。`OrganizationTokenScope` 固定组合 `org_id + user_id`，不接受 `AllMembers`；列表、详情、修改、删除、批量删除均复用此范围。组织权限移除 `org.token.read_all/write_all`，旧策略记录不能恢复这些权限。平台组织资源接口也不提供密钥列表。
-- `OrganizationResourceScope.AllMembers` 仅用于授权的用量查询。Owner/Admin 继续查看成员、模型用量和费用，管理成员周期消费上限。
+- 所有组织角色均只管理自己的 API Key。`TokenScope` 固定组合 `org_id + user_id`，不接受 `AllMembers`；列表、详情、修改、删除、批量删除均复用此范围。组织权限移除 `org.token.read_all/write_all`，旧策略记录不能恢复这些权限。平台组织资源接口也不提供密钥列表。
+- `ResourceScope.AllMembers` 仅用于授权的用量查询。Owner/Admin 继续查看成员、模型用量和费用，管理成员周期消费上限。
 - 成员停用/移除事务先禁用其组织 Key，并使用现有缓存 fence 失效缓存；个人和其他组织 Key 不受影响。恢复/重新邀请成员不会自动启用旧 Key。
 - 新预扣要求有效成员关系；已预扣请求的结算/退款按原凭据继续，保留历史用量、费用。Relay 热缓存仍无需额外成员查询。
 - Token 缓存使用 `token:org-v1:` 命名空间，隔离正式版不含组织字段的缓存。未发布的中间组织策略不提供启动修复或迁移。
