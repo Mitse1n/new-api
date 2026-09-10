@@ -59,10 +59,10 @@ python3 tools/multi-tenancy/snapshot.py restore --offline --config /secure/rollb
 
 ## 发布版升级夹具
 
-`released-fixture.go.txt` 是使用真实旧模型生成代表性测试库的源码，禁止用于生产库。验证基线为 `v1.0.0-rc.35`，从仓库根目录执行：
+`released-fixture.go.txt` 是使用真实旧模型生成代表性测试库的源码，禁止用于生产库。验证基线为 `v1.0.0-rc.36`，从仓库根目录执行：
 
 ```sh
-git worktree add --detach /tmp/new-api-release-check v1.0.0-rc.35
+git worktree add --detach /tmp/new-api-release-check v1.0.0-rc.36
 mkdir -p /tmp/new-api-release-check/cmd/tenancy-fixture
 cp tools/multi-tenancy/released-fixture.go.txt /tmp/new-api-release-check/cmd/tenancy-fixture/main.go
 (cd /tmp/new-api-release-check && go build -o /tmp/new-api-release-fixture ./cmd/tenancy-fixture)

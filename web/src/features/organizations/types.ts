@@ -21,13 +21,11 @@ export type Organization = {
   id: number
   name: string
   slug: string
-  kind: 'team'
   status: number
   owner_id: number
   group: string
   quota: number
   used_quota: number
-  version: number
   budget_period_start: number
   budget_period_end: number
 }

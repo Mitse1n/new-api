@@ -25,7 +25,7 @@ func setOrganizationRoutes(api *gin.RouterGroup) {
 	account.GET("/logs", controller.GetScopedLogs)
 	account.GET("/logs/stat", controller.GetScopedLogStats)
 
-	org := api.Group("/org", middleware.UserAuth(), middleware.OrganizationContext(), middleware.RequireTeamOrganization())
+	org := api.Group("/org", middleware.UserAuth(), middleware.OrganizationContext(), middleware.RequireOrganization())
 	org.GET("/context", controller.GetOrganizationContext)
 	org.GET("/summary", controller.GetOrganizationSummary)
 	org.GET("/orders", middleware.RequireOrgPermission("org.billing", "read"), controller.GetOrganizationOrders)

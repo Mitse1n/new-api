@@ -51,7 +51,7 @@ func TestSetupContextForTokenIntersectsOrganizationModelLimits(t *testing.T) {
 	ctx := newTokenAutoGroupsContext()
 	setupDashboardAuthMiddlewareTest(t)
 	require.NoError(t, model.DB.AutoMigrate(&model.Organization{}, &model.OrganizationMember{}))
-	org := model.Organization{Id: 42, Name: "Team", Slug: "team", Kind: model.OrganizationTeam, Status: model.OrganizationActive, Settings: `{"allowed_models":["allowed","outside-key"]}`}
+	org := model.Organization{Id: 42, Name: "Team", Slug: "team", Status: model.OrganizationActive, Settings: `{"allowed_models":["allowed","outside-key"]}`}
 	require.NoError(t, model.DB.Create(&org).Error)
 	require.NoError(t, model.DB.Create(&model.OrganizationMember{OrgId: 42, UserId: 3, Status: model.OrganizationActive}).Error)
 	token := &model.Token{Id: 9, UserId: 3, OrgId: 42, ModelLimitsEnabled: true, ModelLimits: "allowed,other"}

@@ -14,7 +14,7 @@ import (
 // Platform authorization never turns org_id=0 into a wildcard in OrgScope.
 func PlatformListOrganizations(c *gin.Context) {
 	page := common.GetPageQuery(c)
-	query := model.DB.Model(&model.Organization{}).Where("kind = ?", model.OrganizationTeam)
+	query := model.DB.Model(&model.Organization{})
 	if keyword := strings.TrimSpace(c.Query("keyword")); keyword != "" {
 		query = query.Where("name LIKE ? OR slug LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
@@ -24,7 +24,7 @@ func PlatformListOrganizations(c *gin.Context) {
 		return
 	}
 	var organizations []model.Organization
-	if err := query.Select("id", "name", "slug", "kind", "status", "owner_id", "quota", "used_quota", "group").Order("id desc").Offset(page.GetStartIdx()).Limit(page.GetPageSize()).Find(&organizations).Error; err != nil {
+	if err := query.Select("id", "name", "slug", "status", "owner_id", "quota", "used_quota", "group").Order("id desc").Offset(page.GetStartIdx()).Limit(page.GetPageSize()).Find(&organizations).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -65,7 +65,7 @@ func PlatformOrganizationResources(c *gin.Context) {
 		return
 	}
 	var org model.Organization
-	if err := model.DB.Select("id").Where("id = ? AND kind = ?", orgID, model.OrganizationTeam).First(&org).Error; err != nil {
+	if err := model.DB.Select("id").Where("id = ?", orgID).First(&org).Error; err != nil {
 		organizationError(c, model.ErrOrganizationAccess)
 		return
 	}

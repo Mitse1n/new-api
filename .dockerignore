@@ -10,8 +10,3 @@ docs
 /web/node_modules
 /web/dist
 !THIRD-PARTY-LICENSES.md
-.env
-.env.*
-/data
-/logs
-/prototypes

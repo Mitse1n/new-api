@@ -46,9 +46,7 @@ export function useModelAnalytics(
   const platform = usePlatformView()
   const isPlatformAdmin = platform && (user?.role ?? 0) >= ROLE.ADMIN
   const canCompare =
-    !platform &&
-    context?.organization?.kind === 'team' &&
-    context.capabilities.org['org.usage']?.read_all === true
+    !platform && context?.capabilities.org['org.usage']?.read_all === true
   const timeRange = useMemo(
     () =>
       computeTimeRange(

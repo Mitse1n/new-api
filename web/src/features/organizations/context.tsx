@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 
 import { useAuthStore } from '@/stores/auth-store'
@@ -41,14 +41,11 @@ export function useOrganization() {
 }
 
 export function useSwitchOrganization() {
-  const client = useQueryClient()
   const navigate = useNavigate()
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
   return (orgID: number | null) => {
-    void client.cancelQueries()
-    client.removeQueries()
     useOrganizationStore.getState().select(orgID)
     if (pathname.startsWith('/platform/')) return
     const organizationSection = pathname.match(

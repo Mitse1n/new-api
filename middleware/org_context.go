@@ -35,10 +35,6 @@ func OrganizationContext() gin.HandlerFunc {
 			c.AbortWithStatusJSON(status, gin.H{"success": false, "code": "ORG_UNAVAILABLE", "message": "Organization unavailable."})
 			return
 		}
-		if org.Kind != model.OrganizationTeam {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "ORG_UNAVAILABLE", "message": "Organization unavailable."})
-			return
-		}
 		common.SetContextKey(c, constant.ContextKeyOrgId, org.Id)
 		common.SetContextKey(c, constant.ContextKeyOrgRole, member.Role)
 		common.SetContextKey(c, constant.ContextKeyOrganization, org)
@@ -65,11 +61,11 @@ func OrganizationContext() gin.HandlerFunc {
 }
 
 // Explicit organization endpoints require a validated team context.
-func RequireTeamOrganization() gin.HandlerFunc {
+func RequireOrganization() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		raw, _ := c.Get("organization")
 		org, ok := raw.(*model.Organization)
-		if !ok || org.Kind != model.OrganizationTeam {
+		if !ok || org == nil {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "ORG_UNAVAILABLE", "message": "Organization unavailable."})
 			return
 		}

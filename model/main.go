@@ -85,7 +85,7 @@ func createRootAccountIfNeed() error {
 			AccessToken: nil,
 			Quota:       100000000,
 		}
-		return DB.Create(&rootUser).Error
+		DB.Create(&rootUser)
 	}
 	return nil
 }

@@ -113,7 +113,7 @@ func setupTokenControllerTestDB(t *testing.T) *gorm.DB {
 	migrateTokenControllerTestDB(t, db)
 	require.NoError(t, db.AutoMigrate(&model.Organization{}, &model.OrganizationMember{}, &model.OrganizationAudit{}))
 	for _, id := range []int{1, 2, 101} {
-		require.NoError(t, db.Create(&model.Organization{Id: id, Name: fmt.Sprint(id), Slug: fmt.Sprint(id), Kind: model.OrganizationTeam, OwnerId: id, Status: model.OrganizationActive, Group: "default"}).Error)
+		require.NoError(t, db.Create(&model.Organization{Id: id, Name: fmt.Sprint(id), Slug: fmt.Sprint(id), OwnerId: id, Status: model.OrganizationActive, Group: "default"}).Error)
 		require.NoError(t, db.Create(&model.OrganizationMember{OrgId: id, UserId: id, Role: model.OrgRoleOwner, Status: model.OrganizationActive}).Error)
 	}
 	return db

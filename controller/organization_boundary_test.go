@@ -78,7 +78,7 @@ func TestOrganizationPublicAPIBoundary(t *testing.T) {
 	account := r.Group("/account", middleware.OrganizationContext())
 	account.GET("/summary", GetAccountSummary)
 	account.GET("/tokens", middleware.RequireSelectedOrgPermission("org.token", "write"), GetAllTokens)
-	org := r.Group("/org", middleware.OrganizationContext(), middleware.RequireTeamOrganization())
+	org := r.Group("/org", middleware.OrganizationContext(), middleware.RequireOrganization())
 	org.GET("/context", GetOrganizationContext)
 	org.GET("/members", GetOrganizationMembers)
 

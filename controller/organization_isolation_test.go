@@ -33,7 +33,7 @@ func TestOrganizationAPIsEnforceScopeAndFreshMembership(t *testing.T) {
 	require.NoError(t, authz.Init(db))
 	users := []model.User{{Id: 1, Username: "alpha-owner", AffCode: "ao"}, {Id: 2, Username: "alpha-member", AffCode: "am"}, {Id: 3, Username: "beta-owner", AffCode: "bo"}}
 	require.NoError(t, db.Create(&users).Error)
-	require.NoError(t, db.Create(&[]model.Organization{{Id: 10, Name: "Alpha", Slug: "alpha", Kind: "team", Status: 1, OwnerId: 1, Group: "default"}, {Id: 20, Name: "Beta", Slug: "beta", Kind: "team", Status: 1, OwnerId: 3, Group: "default"}}).Error)
+	require.NoError(t, db.Create(&[]model.Organization{{Id: 10, Name: "Alpha", Slug: "alpha", Status: 1, OwnerId: 1, Group: "default"}, {Id: 20, Name: "Beta", Slug: "beta", Status: 1, OwnerId: 3, Group: "default"}}).Error)
 	require.NoError(t, db.Create(&[]model.OrganizationMember{{OrgId: 10, UserId: 1, Role: "owner", Status: 1}, {OrgId: 10, UserId: 2, Role: "member", Status: 1}, {OrgId: 20, UserId: 3, Role: "owner", Status: 1}}).Error)
 	keys := []model.Token{{OrgId: 10, UserId: 1, Name: "alpha-owned", Key: "secret-alpha-owned"}, {OrgId: 10, UserId: 2, Name: "alpha-member", Key: "secret-alpha-member"}, {OrgId: 20, UserId: 3, Name: "beta-private", Key: "secret-beta-private"}}
 	require.NoError(t, db.Create(&keys).Error)

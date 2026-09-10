@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	OrganizationTeam     = "team"
 	OrganizationActive   = 1
 	OrganizationDisabled = 2
 	OrganizationDeleting = 3
@@ -41,13 +40,11 @@ type Organization struct {
 	Name              string         `json:"name" gorm:"type:varchar(64);not null"`
 	Slug              string         `json:"slug" gorm:"type:varchar(64);uniqueIndex;not null"`
 	OwnerId           int            `json:"owner_id" gorm:"index"`
-	Kind              string         `json:"kind" gorm:"type:varchar(16);not null"`
 	Status            int            `json:"status" gorm:"not null"`
 	Group             string         `json:"group" gorm:"type:varchar(64);not null"`
 	Quota             int64          `json:"quota" gorm:"type:bigint;not null"`
 	UsedQuota         int64          `json:"used_quota" gorm:"type:bigint;not null"`
 	Settings          string         `json:"settings" gorm:"type:text"`
-	Version           int64          `json:"version" gorm:"type:bigint;not null"`
 	BudgetPeriodStart int64          `json:"budget_period_start" gorm:"type:bigint"`
 	BudgetPeriodEnd   int64          `json:"budget_period_end" gorm:"type:bigint"`
 	CreatedAt         int64          `json:"created_at" gorm:"autoCreateTime"`
@@ -136,8 +133,8 @@ func CreateTeamOrganization(userID int, name, slug string) (*Organization, error
 		!organizationSlugPattern.MatchString(slug) {
 		return nil, ErrOrganizationInput
 	}
-	org := Organization{Name: name, Slug: slug, OwnerId: userID, Kind: OrganizationTeam,
-		Status: OrganizationActive, Group: "default", Version: 1}
+	org := Organization{Name: name, Slug: slug, OwnerId: userID,
+		Status: OrganizationActive, Group: "default"}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var user User
 		if err := tx.Where("id = ? AND status = ?", userID, common.UserStatusEnabled).First(&user).Error; err != nil {

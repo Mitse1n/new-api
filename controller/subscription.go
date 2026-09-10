@@ -77,7 +77,7 @@ func GetSubscriptionSelf(c *gin.Context) {
 		}
 	}
 	if raw, exists := c.Get("organization"); exists {
-		if org, ok := raw.(*model.Organization); ok && org.Kind == model.OrganizationTeam {
+		if org, ok := raw.(*model.Organization); ok && org != nil {
 			pref = "subscription_first"
 		}
 	}
@@ -91,7 +91,7 @@ func GetSubscriptionSelf(c *gin.Context) {
 
 func UpdateSubscriptionPreference(c *gin.Context) {
 	if raw, exists := c.Get("organization"); exists {
-		if org, ok := raw.(*model.Organization); ok && org.Kind == model.OrganizationTeam {
+		if org, ok := raw.(*model.Organization); ok && org != nil {
 			organizationError(c, model.ErrOrganizationInput)
 			return
 		}

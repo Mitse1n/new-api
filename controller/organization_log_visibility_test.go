@@ -47,7 +47,7 @@ func TestOrganizationLogVisibility(t *testing.T) {
 		require.NoError(t, db.Migrator().DropTable(resource))
 		require.NoError(t, db.AutoMigrate(resource))
 	}
-	org := model.Organization{Id: 10, Name: "Team", Slug: "team", Kind: model.OrganizationTeam, Status: model.OrganizationActive, Group: "default"}
+	org := model.Organization{Id: 10, Name: "Team", Slug: "team", Status: model.OrganizationActive, Group: "default"}
 	require.NoError(t, db.Create(&org).Error)
 	require.NoError(t, db.Create(&model.Channel{Id: 5, Name: "private-upstream-supplier"}).Error)
 	other := model.NewLogOther()

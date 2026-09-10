@@ -49,7 +49,7 @@ func TestGetOpenAIVideoRouteRendersJimengTask(t *testing.T) {
 		Group:       "default",
 		AuthVersion: 1,
 	}).Error)
-	require.NoError(t, database.Create(&model.Organization{Id: 91, Name: "Team", Slug: "video-team", Kind: model.OrganizationTeam, Status: model.OrganizationActive, Group: "default"}).Error)
+	require.NoError(t, database.Create(&model.Organization{Id: 91, Name: "Team", Slug: "video-team", Status: model.OrganizationActive, Group: "default"}).Error)
 	require.NoError(t, database.Create(&model.OrganizationMember{OrgId: 91, UserId: 91, Status: model.OrganizationActive, Role: model.OrgRoleOwner}).Error)
 	require.NoError(t, database.Create(&model.Token{
 		Id:             1,

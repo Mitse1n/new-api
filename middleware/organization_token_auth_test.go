@@ -35,7 +35,7 @@ func TestOrganizationTokenAuthReadsCurrentPolicy(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, common.RDB.Close()); common.RDB = oldRDB })
 	user := model.User{Username: "owner", Status: common.UserStatusEnabled, Group: "default", AuthVersion: 1}
 	require.NoError(t, db.Create(&user).Error)
-	org := model.Organization{Name: "Team", Slug: "auth-team", Kind: model.OrganizationTeam, Status: model.OrganizationActive, Group: "default", Settings: `{"allowed_models":["allowed"]}`}
+	org := model.Organization{Name: "Team", Slug: "auth-team", Status: model.OrganizationActive, Group: "default", Settings: `{"allowed_models":["allowed"]}`}
 	require.NoError(t, db.Create(&org).Error)
 	member := model.OrganizationMember{OrgId: org.Id, UserId: user.Id, Status: model.OrganizationActive}
 	require.NoError(t, db.Create(&member).Error)

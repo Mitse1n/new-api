@@ -27,7 +27,7 @@ type OrganizationDeletionImpact struct {
 // Ordinary organization context continues to fail closed.
 func lockOrganizationOwner(tx *gorm.DB, orgID, actorID int) (*Organization, error) {
 	var org Organization
-	if err := lockForUpdate(tx).Where("id = ? AND owner_id = ? AND kind = ? AND status IN ?", orgID, actorID, OrganizationTeam, []int{OrganizationActive, OrganizationDisabled}).First(&org).Error; err != nil {
+	if err := lockForUpdate(tx).Where("id = ? AND owner_id = ? AND status IN ?", orgID, actorID, []int{OrganizationActive, OrganizationDisabled}).First(&org).Error; err != nil {
 		return nil, ErrOrganizationAccess
 	}
 	var count int64
@@ -112,8 +112,8 @@ func ChangeOrganizationStatus(orgID, actorID, status int, confirmSlug string) er
 				return ErrOrganizationUnsettled
 			}
 		}
-		org.Status, org.Version = status, org.Version+1
-		if err := tx.Model(org).Updates(map[string]interface{}{"status": status, "version": org.Version}).Error; err != nil {
+		org.Status = status
+		if err := tx.Model(org).Update("status", status).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&OrganizationAudit{OrgId: orgID, ActorId: actorID, Action: "organization.status", ObjectId: fmt.Sprint(status), Result: "success"}).Error; err != nil {
@@ -131,12 +131,9 @@ func RequestOrganizationTransfer(orgID, actorID, targetID int) error {
 		return ErrOrganizationOwner
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		org, err := lockOrganizationManager(tx, orgID, actorID, true)
+		_, err := lockOrganizationManager(tx, orgID, actorID, true)
 		if err != nil {
 			return err
-		}
-		if org.Kind != OrganizationTeam {
-			return ErrOrganizationOwner
 		}
 		var target OrganizationMember
 		if err := tx.Scopes(OrgScope(orgID)).Where("user_id = ? AND status = ?", targetID, OrganizationActive).First(&target).Error; err != nil {
@@ -153,7 +150,7 @@ func RequestOrganizationTransfer(orgID, actorID, targetID int) error {
 func AcceptOrganizationTransfer(orgID, actorID int) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var org Organization
-		if err := lockForUpdate(tx).Where("id = ? AND status = ? AND kind = ?", orgID, OrganizationActive, OrganizationTeam).First(&org).Error; err != nil {
+		if err := lockForUpdate(tx).Where("id = ? AND status = ?", orgID, OrganizationActive).First(&org).Error; err != nil {
 			return ErrOrganizationAccess
 		}
 		var transfer OrganizationTransfer
@@ -170,7 +167,7 @@ func AcceptOrganizationTransfer(orgID, actorID int) error {
 		if err := tx.Model(&member).Update("role", OrgRoleOwner).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&org).Updates(map[string]interface{}{"owner_id": actorID, "version": gorm.Expr("version + 1")}).Error; err != nil {
+		if err := tx.Model(&org).Update("owner_id", actorID).Error; err != nil {
 			return err
 		}
 		if err := tx.Delete(&transfer).Error; err != nil {
