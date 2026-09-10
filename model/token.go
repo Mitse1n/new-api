@@ -11,9 +11,6 @@ import (
 )
 
 type Token struct {
-	OrgStatus          int            `json:"-"`
-	OrgGroup           string         `json:"-" gorm:"type:varchar(64)"`
-	OrgSettings        string         `json:"-" gorm:"type:text"`
 	OrgId              int            `json:"org_id" gorm:"index:idx_org_token,priority:1"`
 	Id                 int            `json:"id"`
 	UserId             int            `json:"user_id" gorm:"index"`

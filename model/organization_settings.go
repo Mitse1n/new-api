@@ -76,9 +76,6 @@ func UpdateOrganizationSettings(orgID, actorID int, name string, settings Organi
 		if err := tx.Model(org).Updates(map[string]interface{}{"name": name, "settings": org.Settings, "version": org.Version}).Error; err != nil {
 			return err
 		}
-		if err := RefreshOrganizationTokensTx(tx, org); err != nil {
-			return err
-		}
 		return tx.Create(&OrganizationAudit{OrgId: orgID, ActorId: actorID, Action: "settings.update", ObjectId: fmt.Sprint(orgID), Result: "success"}).Error
 	})
 }

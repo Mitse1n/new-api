@@ -35,7 +35,7 @@
 
 组织行锁串行化同一组织的资金和上限检查；SQLite 由写事务串行化，MySQL/PostgreSQL 使用 `lockForUpdate`。请求凭据使用唯一请求 ID，重复预扣只预留目标总量，重复结算和退款不重复记账。Key 预扣和组织预扣在同一事务内，任何上限或余额检查失败会一并回滚。结算超过预估沿用现有最终费用补扣语义，允许欠费但不允许整数溢出。跨订阅重置周期退款不会向新周期凭空增加额度。
 
-组织计费不依赖 Redis 余额。Redis 故障时从数据库恢复 Token 身份读取；个人请求复用用户钱包及个人订阅路径，不再维护组织钱包投影。权限和组织状态修改采取失败关闭：无法安全失效缓存时，操作不会提交。
+组织计费不依赖 Redis 余额。Redis 故障时从数据库恢复 Token 身份读取；个人请求复用用户钱包及个人订阅路径，不再维护组织钱包投影。组织状态、分组和设置不复制到 Token；组织鉴权通过数据库读取当前成员与组织状态，单次请求复用该结果，不建立跨请求组织缓存。组织配置修改无需批量更新 Token。成员撤销仍禁用其 Key，并要求 Token 缓存失效成功。
 
 持久化凭据可用于重试和核对，但无法凭空判断进程崩溃时上游是否已执行。异常中断后，先核对 `reserved` 凭据、上游结果与任务状态，再按原请求 ID 完成结算或退款；不要仅按创建时间自动退款。离线恢复到上线前快照会丢失快照后的写入，因此开放流量后如需回滚，应先停流量并导出、对账和处理新增订单、支付回调及消费。
 
@@ -225,7 +225,7 @@ MJ_IMAGE_TEST_POSTGRES_DSN='host=127.0.0.1 port=62154 user=postgres dbname=mj_te
 
 ## 个人与组织共享资源重构（2026-09-10）
 
-将共享查询的 `OrganizationResourceScope` / `OrganizationTokenScope` 改为 `ResourceScope` / `TokenScope`，共享 API 使用 `Scoped*` 命名。`resource_scope.go` 定义个人或单一组织的读范围；`scoped_resources.go`、`scoped_tokens.go` 承载共享资源操作；`organization_tokens.go` 仅保留组织状态投影和成员 Key 撤销。已购套餐读取改名 `GetPurchasedSubscriptionPlan`，移回通用订阅模块。
+将共享查询的 `OrganizationResourceScope` / `OrganizationTokenScope` 改为 `ResourceScope` / `TokenScope`，共享 API 使用 `Scoped*` 命名。`resource_scope.go` 定义个人或单一组织的读范围；`scoped_resources.go`、`scoped_tokens.go` 承载共享资源操作；`organization_tokens.go` 仅保留成员 Key 撤销。已购套餐读取改名 `GetPurchasedSubscriptionPlan`，移回通用订阅模块。
 
 Controller 的共享用量入口改名 `GetScopedLogs` / `GetScopedLogStats`，个人作用域直接返回，不经过组织权限计算。日志响应仍明确区分个人 `FormatUserLogs` 与组织 `FormatOrganizationLogs`。删除两个已被作用域入口替代、没有路由调用的旧日志处理器，以及成员 Key 撤销的单次调用转发 helper。HTTP 路由、字段、查询条件、事务和计费行为保持不变，没有 schema 变更。
 
@@ -237,4 +237,21 @@ TENANCY_TEST_MYSQL_DSN='root@tcp(127.0.0.1:62988)/scope_test?charset=utf8mb4&par
 TENANCY_TEST_POSTGRES_DSN='host=127.0.0.1 port=62987 user=postgres dbname=scope_test sslmode=disable' go test ./model -run 'TestOrganization|TestAccount' -count=1
 ORGANIZATION_API_TEST_MYSQL_DSN='root@tcp(127.0.0.1:62988)/scope_api?charset=utf8mb4&parseTime=true' go test ./controller -run 'TestOrganizationPublicAPIBoundary|TestOrganizationLogVisibility' -count=1
 ORGANIZATION_API_TEST_POSTGRES_DSN='host=127.0.0.1 port=62987 user=postgres dbname=scope_api sslmode=disable' go test ./controller -run 'TestOrganizationPublicAPIBoundary|TestOrganizationLogVisibility' -count=1
+```
+
+
+## 组织鉴权移除 Token 状态副本（2026-09-10）
+
+Token 保留 `OrgId`，移除 `OrgStatus`、`OrgGroup`、`OrgSettings` 模型字段和 Redis 写入，以及所有组织配置变更后的批量 Token 同步。个人鉴权继续使用用户缓存；组织鉴权从数据库读取有效成员和组织，普通 relay、只读 Token 接口与 Playground 均检查组织状态。分组与模型限制使用当前组织数据，模型限制仍与 Key 限制取交集。查询失败时拒绝请求。
+
+此方案每个组织请求增加成员和组织各一次查询；仅在请求内复用，不引入有失效窗口的组织缓存。正式版 Token 表没有这三个副本列；新建及正式版升级不再创建它们。未发布开发库已有列可暂留，运行时不再读写，不执行启动删列。旧 Redis hash 中的额外字段不再参与鉴权。
+
+验证数据库：SQLite 3.50.4、MySQL 5.7.44、PostgreSQL 9.6.24。三种数据库的 `TestOrganization` 行为测试通过；鉴权、只读接口、Playground 相关上下文、视频路由测试通过。热 Token 缓存下组织停用/恢复、成员撤销、分组与模型限制变化均按当前数据库状态处理。每种数据库均完成新建库和既有正式版夹具升级的两次启动，检查原余额、Token、日志、索引和约束；MySQL/PostgreSQL 包含独立日志库。验证脚本与结果位于 `/tmp/new-api-orgauth-check/`，未修改生产数据库。
+
+```sh
+go test ./middleware ./model ./router ./controller -run 'Organization|TokenAuth|SetupContextForToken|Video|Jimeng|Playground|SubscriptionOrder' -count=1 -timeout=120s
+# 分别设置指向独立测试库的 TENANCY_TEST_MYSQL_DSN / TENANCY_TEST_POSTGRES_DSN
+go test ./model -run 'TestOrganization' -count=1
+go build -o /tmp/new-api-orgauth-check/startup ./tools/multi-tenancy-verify
+python3 /tmp/new-api-orgauth-check/verify.py
 ```

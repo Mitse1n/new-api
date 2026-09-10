@@ -14,7 +14,6 @@ func InsertScopedToken(token *Token) error {
 		return ErrOrganizationInput
 	}
 	if token.OrgId == 0 {
-		token.OrgStatus, token.OrgGroup, token.OrgSettings = 0, "", ""
 		return token.Insert()
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
@@ -26,7 +25,6 @@ func InsertScopedToken(token *Token) error {
 		if err := tx.Scopes(OrgScope(org.Id)).Where("user_id = ? AND status = ?", token.UserId, OrganizationActive).First(&member).Error; err != nil {
 			return ErrOrganizationAccess
 		}
-		token.OrgStatus, token.OrgGroup, token.OrgSettings = org.Status, org.Group, org.Settings
 		if err := tx.Create(token).Error; err != nil {
 			return err
 		}

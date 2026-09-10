@@ -28,7 +28,7 @@ func TestGetOpenAIVideoRouteRendersJimengTask(t *testing.T) {
 	t.Setenv("SQL_DSN", "")
 	require.NoError(t, model.InitDB())
 	database := model.DB
-	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Token{}, &model.Channel{}, &model.Task{}))
+	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Token{}, &model.Channel{}, &model.Task{}, &model.Organization{}, &model.OrganizationMember{}))
 	t.Cleanup(func() {
 		sqlDB, closeErr := database.DB()
 		require.NoError(t, closeErr)
@@ -49,12 +49,12 @@ func TestGetOpenAIVideoRouteRendersJimengTask(t *testing.T) {
 		Group:       "default",
 		AuthVersion: 1,
 	}).Error)
+	require.NoError(t, database.Create(&model.Organization{Id: 91, Name: "Team", Slug: "video-team", Kind: model.OrganizationTeam, Status: model.OrganizationActive, Group: "default"}).Error)
+	require.NoError(t, database.Create(&model.OrganizationMember{OrgId: 91, UserId: 91, Status: model.OrganizationActive, Role: model.OrgRoleOwner}).Error)
 	require.NoError(t, database.Create(&model.Token{
 		Id:             1,
 		UserId:         91,
 		OrgId:          91,
-		OrgStatus:      model.OrganizationActive,
-		OrgGroup:       "default",
 		Key:            "jimengfetch",
 		Status:         common.TokenStatusEnabled,
 		Name:           "jimeng fetch",

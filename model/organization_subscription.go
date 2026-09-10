@@ -70,9 +70,6 @@ func CreateOrganizationSubscriptionFromPlanTx(tx *gorm.DB, orgID, actorID int, p
 		if err := tx.Model(&org).Updates(map[string]interface{}{"group": org.Group, "version": gorm.Expr("version + 1")}).Error; err != nil {
 			return nil, err
 		}
-		if err := RefreshOrganizationTokensTx(tx, &org); err != nil {
-			return nil, err
-		}
 	}
 	return sub, nil
 }
@@ -119,7 +116,7 @@ func downgradeOrganizationSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	if err := tx.Model(&org).Updates(map[string]interface{}{"group": group, "version": gorm.Expr("version + 1")}).Error; err != nil {
 		return "", err
 	}
-	return group, RefreshOrganizationTokensTx(tx, &org)
+	return group, nil
 }
 
 func PurchaseOrganizationSubscriptionWithBalance(orgID, actorID, planID int) error {

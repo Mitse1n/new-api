@@ -316,7 +316,7 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 
 		// TokenAuthReadOnly must keep allowing other token states to query read-only
 		// data, such as token usage logs; only explicitly disabled tokens are denied.
-		if token.Status == common.TokenStatusDisabled || token.OrgId > 0 && token.OrgStatus != model.OrganizationActive {
+		if token.Status == common.TokenStatusDisabled {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"message": common.TranslateMessage(c, i18n.MsgTokenStatusUnavailable),
@@ -345,6 +345,16 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 		}
 
 		c.Set("id", token.UserId)
+		if token.OrgId > 0 {
+			if _, _, err := model.GetOrganizationMembership(token.OrgId, token.UserId); err != nil {
+				status := http.StatusInternalServerError
+				if errors.Is(err, model.ErrOrganizationAccess) {
+					status = http.StatusForbidden
+				}
+				c.AbortWithStatusJSON(status, gin.H{"success": false, "message": "Organization unavailable."})
+				return
+			}
+		}
 		common.SetContextKey(c, constant.ContextKeyOrgId, token.OrgId)
 		c.Set("token_id", token.Id)
 		c.Set("token_key", token.Key)
@@ -459,15 +469,10 @@ func TokenAuth() func(c *gin.Context) {
 
 		userCache.WriteContext(c)
 
-		userGroup := userCache.Group
-		if token.OrgId > 0 {
-			if token.OrgStatus != model.OrganizationActive {
-				abortWithOpenAiMessage(c, http.StatusForbidden, "Organization unavailable.")
-				return
-			}
-			userGroup = token.OrgGroup
-			common.SetContextKey(c, constant.ContextKeyUserGroup, userGroup)
+		if err := SetupContextForToken(c, token, parts...); err != nil {
+			return
 		}
+		userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 		tokenGroup := token.Group
 		if tokenGroup != "" {
 			// check common.UserUsableGroups[userGroup]
@@ -486,10 +491,6 @@ func TokenAuth() func(c *gin.Context) {
 		}
 		common.SetContextKey(c, constant.ContextKeyUsingGroup, userGroup)
 
-		err = SetupContextForToken(c, token, parts...)
-		if err != nil {
-			return
-		}
 		c.Next()
 	}
 }
@@ -513,8 +514,18 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	} else {
 		c.Set("token_model_limit_enabled", false)
 	}
-	if token.OrgId > 0 && token.OrgSettings != "" {
-		settings, err := (&model.Organization{Settings: token.OrgSettings}).EffectiveSettings()
+	if token.OrgId > 0 {
+		org, _, err := model.GetOrganizationMembership(token.OrgId, token.UserId)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, model.ErrOrganizationAccess) {
+				status = http.StatusForbidden
+			}
+			abortWithOpenAiMessage(c, status, "Organization unavailable.")
+			return err
+		}
+		common.SetContextKey(c, constant.ContextKeyUserGroup, org.Group)
+		settings, err := org.EffectiveSettings()
 		if err != nil {
 			abortWithOpenAiMessage(c, http.StatusForbidden, "Organization unavailable.")
 			return err

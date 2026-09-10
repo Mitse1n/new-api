@@ -25,7 +25,7 @@ func TestOrganizationPlatformSuspensionRequiresPlatformRestore(t *testing.T) {
 	_, _, err = GetOrganizationMembership(org.Id, users[0].Id)
 	assert.ErrorIs(t, err, ErrOrganizationAccess)
 	require.NoError(t, db.First(&token, token.Id).Error)
-	assert.NotEqual(t, OrganizationActive, token.OrgStatus)
+	assert.Equal(t, common.TokenStatusEnabled, token.Status)
 
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 		return PlatformChangeOrganizationStatusTx(tx, org.Id, 999, OrganizationActive, "platform restore")
@@ -33,7 +33,7 @@ func TestOrganizationPlatformSuspensionRequiresPlatformRestore(t *testing.T) {
 	_, _, err = GetOrganizationMembership(org.Id, users[0].Id)
 	require.NoError(t, err)
 	require.NoError(t, db.First(&token, token.Id).Error)
-	assert.Equal(t, OrganizationActive, token.OrgStatus)
+	assert.Equal(t, common.TokenStatusEnabled, token.Status)
 	// Owner-managed suspension still supports self-service restoration.
 	require.NoError(t, ChangeOrganizationStatus(org.Id, users[0].Id, OrganizationDisabled, ""))
 	require.NoError(t, ChangeOrganizationStatus(org.Id, users[0].Id, OrganizationActive, ""))

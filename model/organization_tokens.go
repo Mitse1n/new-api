@@ -5,24 +5,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Organization state is projected into tokens so resolving an organization never
-// adds a database lookup to relay authentication. Governance writes invalidate
-// cached projections before committing, including on other Redis clients.
-func RefreshOrganizationTokensTx(tx *gorm.DB, org *Organization) error {
-	var tokens []Token
-	if err := tx.Scopes(OrgScope(org.Id)).Select("id", "key").Find(&tokens).Error; err != nil {
-		return err
-	}
-	for _, token := range tokens {
-		if err := invalidateTokenCacheForMutation(token.Key); err != nil {
-			return err
-		}
-	}
-	return tx.Model(&Token{}).Scopes(OrgScope(org.Id)).Updates(map[string]interface{}{
-		"org_status": org.Status, "org_group": org.Group, "org_settings": org.Settings,
-	}).Error
-}
-
 // DisableOrganizationMemberTokensTx revokes all keys of a member before a
 // governance transaction commits. Re-enabling membership never revives keys.
 func DisableOrganizationMemberTokensTx(tx *gorm.DB, orgID, userID int) error {

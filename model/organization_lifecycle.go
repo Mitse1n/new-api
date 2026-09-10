@@ -116,9 +116,6 @@ func ChangeOrganizationStatus(orgID, actorID, status int, confirmSlug string) er
 		if err := tx.Model(org).Updates(map[string]interface{}{"status": status, "version": org.Version}).Error; err != nil {
 			return err
 		}
-		if err := RefreshOrganizationTokensTx(tx, org); err != nil {
-			return err
-		}
 		if err := tx.Create(&OrganizationAudit{OrgId: orgID, ActorId: actorID, Action: "organization.status", ObjectId: fmt.Sprint(status), Result: "success"}).Error; err != nil {
 			return err
 		}
