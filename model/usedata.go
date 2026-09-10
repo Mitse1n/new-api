@@ -111,15 +111,15 @@ func SaveQuotaDataCache() {
 	// 3. 如果没有数据，就插入数据
 	for _, quotaData := range CacheQuotaData {
 		quotaDataDB := &QuotaData{}
-		DB.Table("quota_data").
-			Where("org_id = ? and user_id = ? and username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
-				quotaData.OrgId, quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt, quotaData.UseGroup, quotaData.TokenID, quotaData.ChannelID, quotaData.NodeName).
+		DB.Table("quota_data").Scopes((ResourceScope{OrgID: quotaData.OrgId, UserID: quotaData.UserID}).Apply).
+			Where("username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
+				quotaData.Username, quotaData.ModelName, quotaData.CreatedAt, quotaData.UseGroup, quotaData.TokenID, quotaData.ChannelID, quotaData.NodeName).
 			First(quotaDataDB)
 		if quotaDataDB.Id > 0 {
 			//quotaDataDB.Count += quotaData.Count
 			//quotaDataDB.Quota += quotaData.Quota
 			//DB.Table("quota_data").Save(quotaDataDB)
-			increaseQuotaData(quotaData)
+			increaseQuotaData(quotaDataDB.Id, quotaData)
 		} else {
 			DB.Table("quota_data").Create(quotaData)
 		}
@@ -128,10 +128,8 @@ func SaveQuotaDataCache() {
 	common.SysLog(fmt.Sprintf("保存数据看板数据成功，共保存%d条数据", size))
 }
 
-func increaseQuotaData(quotaData *QuotaData) {
-	err := DB.Table("quota_data").
-		Where("org_id = ? and user_id = ? and username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
-			quotaData.OrgId, quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt, quotaData.UseGroup, quotaData.TokenID, quotaData.ChannelID, quotaData.NodeName).
+func increaseQuotaData(id int, quotaData *QuotaData) {
+	err := DB.Table("quota_data").Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"count":      gorm.Expr("count + ?", quotaData.Count),
 			"quota":      gorm.Expr("quota + ?", quotaData.Quota),

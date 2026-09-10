@@ -197,7 +197,7 @@ func Redeem(key string, userId int, orgIDs ...int) (quota int, err error) {
 	if orgID == 0 {
 		syncCreditUserQuotaCache(userId, redemption.Quota, "redemption")
 	}
-	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id))
+	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id), orgID)
 	return redemption.Quota, nil
 }
 

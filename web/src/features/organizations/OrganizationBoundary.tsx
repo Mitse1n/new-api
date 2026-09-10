@@ -16,8 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
-import { useEffect, type ReactNode } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useLayoutEffect, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,16 @@ import { getOrganizationContext, listOrganizations } from './api'
 
 export function OrganizationBoundary(props: { children: ReactNode }) {
   const { t } = useTranslation()
+  const client = useQueryClient()
+  useLayoutEffect(
+    () =>
+      useOrganizationStore.subscribe((state, previous) => {
+        if (state.epoch === previous.epoch) return
+        void client.cancelQueries()
+        client.removeQueries()
+      }),
+    [client]
+  )
   const userID = useAuthStore((state) => state.auth.user?.id)
   const boundUserID = useOrganizationStore((state) => state.userID)
   const activeOrgID = useOrganizationStore((state) => state.activeOrgID)

@@ -27,10 +27,13 @@ func RegisterResource(resource ResourceDefinition) {
 	registry = append(registry, resource)
 }
 
-// Catalog returns a copy of the registered resource definitions.
+// Catalog returns the platform resources editable through platform authorization.
 func Catalog() []ResourceDefinition {
 	result := make([]ResourceDefinition, 0, len(registry))
 	for _, resource := range registry {
+		if resource.Scope != "platform" {
+			continue
+		}
 		result = append(result, ResourceDefinition{
 			Scope:    resource.Scope,
 			Resource: resource.Resource,
@@ -107,6 +110,15 @@ func isKnownPermission(permission Permission) bool {
 			if action.Action == permission.Action {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func isPlatformResource(resource string) bool {
+	for _, known := range registry {
+		if known.Resource == resource {
+			return known.Scope == "platform"
 		}
 	}
 	return false

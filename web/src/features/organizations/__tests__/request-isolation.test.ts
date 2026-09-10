@@ -126,3 +126,41 @@ test('switching from personal to a team discards in-flight account responses wit
   expect(axios.isCancel(await oldRequest)).toBe(true)
   expect((await currentRequest).data.success).toBe(true)
 })
+
+test('a forbidden organization operation keeps the selection and unrelated requests alive', async () => {
+  const epoch = useOrganizationStore.getState().epoch
+  const pending = api.get('/api/org/summary')
+  const rejection = api.post(
+    '/api/org/settings',
+    {},
+    {
+      adapter: async (config) => {
+        throw new axios.AxiosError(
+          'Forbidden',
+          'ERR_BAD_REQUEST',
+          config,
+          undefined,
+          {
+            config,
+            data: { code: 'ORG_FORBIDDEN' },
+            status: 403,
+            statusText: 'Forbidden',
+            headers: {},
+          }
+        )
+      },
+      skipErrorHandler: true,
+    }
+  )
+  await expect(rejection).rejects.toMatchObject({ response: { status: 403 } })
+  expect(useOrganizationStore.getState().epoch).toBe(epoch)
+  expect(useOrganizationStore.getState().activeOrgID).toBe(10)
+  responses[0].resolve({
+    config: responses[0].config,
+    data: { success: true },
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+  })
+  await expect(pending).resolves.toMatchObject({ data: { success: true } })
+})

@@ -570,7 +570,7 @@ func getTaskOriginModelName(c *gin.Context) string {
 	}
 
 	userId := c.GetInt("id")
-	if task, exist, err := model.GetByTaskId(userId, taskId); err == nil && exist && task != nil {
+	if task, exist, err := model.GetScopedTask(model.ResourceScope{OrgID: c.GetInt("org_id"), UserID: userId}, taskId); err == nil && exist && task != nil {
 		return task.Properties.OriginModelName
 	}
 	return ""

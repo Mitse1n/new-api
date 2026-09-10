@@ -7,6 +7,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestOrganizationPermissionsKeepRolesAndDomainsSeparate(t *testing.T) {
@@ -59,4 +60,25 @@ func TestOrganizationDomainMigrationPreservesLegacyDenyOnRestart(t *testing.T) {
 	require.NoError(t, db.First(&legacy, legacy.Id).Error)
 	assert.Equal(t, "*", legacy.V1)
 	assert.Equal(t, EffectDeny, legacy.V4)
+}
+
+func TestPlatformPermissionEditingExcludesOrganizationResources(t *testing.T) {
+	db := newAuthzTestDB(t)
+	require.NoError(t, Init(db))
+	for _, resource := range Catalog() {
+		assert.Equal(t, "platform", resource.Scope)
+	}
+	input := PermissionsMap{"org.billing": {"write": true}, "channel": {"write": false}}
+	require.NoError(t, SetUserPermissions(42, input))
+	assert.NotContains(t, ExplicitUserOverrides(42), "org.billing")
+	assert.False(t, Can(42, common.RoleAdminUser, ChannelWrite))
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return SetUserPermissionsInTx(tx, 43, input) }))
+	require.NoError(t, ReloadPolicy())
+	assert.NotContains(t, ExplicitUserOverrides(43), "org.billing")
+	var organizationOverrides int64
+	require.NoError(t, db.Model(&model.CasbinRule{}).Where("v0 IN ? AND v2 = ?", []string{UserSubject(42), UserSubject(43)}, "org.billing").Count(&organizationOverrides).Error)
+	assert.Zero(t, organizationOverrides, "platform writes must not persist organization permissions")
+	_, err := currentEnforcer().AddPolicy(UserSubject(44), "*", "org.billing", "write", EffectAllow)
+	require.NoError(t, err)
+	assert.NotContains(t, ExplicitUserOverrides(44), "org.billing", "obsolete platform overrides must not appear in the editor")
 }

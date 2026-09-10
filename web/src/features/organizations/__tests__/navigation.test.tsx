@@ -339,3 +339,34 @@ test.each([null, 99])(
     expect(useOrganizationStore.getState().activeOrgID).toBeNull()
   }
 )
+
+test('automatic fallback after membership removal clears cached organization resources', async () => {
+  useOrganizationStore.getState().select(2)
+  useOrganizationStore
+    .getState()
+    .setContext(teamContext, useOrganizationStore.getState().epoch)
+  client.setQueryData(
+    ['dashboard', 'overview', 'api-keys'],
+    [{ name: 'old-team-key' }]
+  )
+  api.defaults.adapter = async (config) => ({
+    config,
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    data: { success: true, data: [] },
+  })
+  render(
+    <OrganizationBoundary>
+      <p>Personal content</p>
+    </OrganizationBoundary>,
+    { wrapper: Wrapper }
+  )
+  await screen.findByText('Personal content')
+  await waitFor(() =>
+    expect(useOrganizationStore.getState().activeOrgID).toBeNull()
+  )
+  expect(
+    client.getQueryData(['dashboard', 'overview', 'api-keys'])
+  ).toBeUndefined()
+})

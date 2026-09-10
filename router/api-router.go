@@ -345,6 +345,7 @@ func SetApiRouter(router *gin.Engine) {
 		mjRoute.GET("/self", middleware.UserAuth(), middleware.OrganizationContext(), controller.GetUserMidjourney)
 		mjRoute.GET("/", middleware.AdminAuth(), controller.GetAllMidjourney)
 
+		apiRouter.GET("/platform/tasks/:task_id/artifacts", middleware.AdminAuth(), controller.GetPlatformTaskArtifacts)
 		taskRoute := apiRouter.Group("/task")
 		{
 			taskRoute.GET("/self", middleware.UserAuth(), middleware.OrganizationContext(), controller.GetUserTask)

@@ -55,7 +55,9 @@ import {
 } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
+import { usePlatformView } from '@/features/organizations/platform-view'
 import { cn } from '@/lib/utils'
+import { useOrganizationStore } from '@/stores/organization-store'
 
 import { getTaskArtifacts } from '../api'
 import {
@@ -309,9 +311,16 @@ interface TaskArtifactsProps {
 
 function TaskArtifacts(props: TaskArtifactsProps) {
   const { t } = useTranslation()
+  const platform = usePlatformView()
+  const orgID = useOrganizationStore((state) => state.activeOrgID)
   const artifactsQuery = useQuery({
-    queryKey: ['usage-logs', 'task-artifacts', props.taskId],
-    queryFn: () => getTaskArtifacts(props.taskId),
+    queryKey: [
+      'usage-logs',
+      'task-artifacts',
+      platform ? 'platform' : orgID,
+      props.taskId,
+    ],
+    queryFn: () => getTaskArtifacts(props.taskId, platform),
     enabled: props.enabled,
     retry: false,
     staleTime: 30_000,

@@ -1,6 +1,7 @@
 package authz
 
 import (
+	"os"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -8,6 +9,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -18,11 +21,23 @@ func newAuthzTestDB(t *testing.T) *gorm.DB {
 	t.Cleanup(func() {
 		common.IsMasterNode = wasMaster
 	})
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	var dialector gorm.Dialector = sqlite.Open(":memory:")
+	if dsn := os.Getenv("TENANCY_TEST_MYSQL_DSN"); dsn != "" {
+		dialector = mysql.Open(dsn)
+	}
+	if dsn := os.Getenv("TENANCY_TEST_POSTGRES_DSN"); dsn != "" {
+		dialector = postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true})
+	}
+	db, err := gorm.Open(dialector, &gorm.Config{})
 	require.NoError(t, err)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
+	// External DSNs must point to disposable, isolated test databases.
+	if dialector.Name() != "sqlite" {
+		require.NoError(t, db.Migrator().DropTable(&model.CasbinRule{}, &model.AuthzRole{}))
+	}
 	require.NoError(t, db.AutoMigrate(&model.CasbinRule{}, &model.AuthzRole{}))
 	return db
 }

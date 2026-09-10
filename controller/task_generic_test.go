@@ -219,6 +219,29 @@ func TestTaskArtifactAccessRequiresActiveOwner(t *testing.T) {
 	assert.Equal(t, "private, no-store", recorder.Header().Get("Cache-Control"))
 }
 
+func TestPlatformTaskArtifactsDoesNotWidenOrdinaryDashboardScope(t *testing.T) {
+	task := setupGenericTaskTest(t)
+	for _, test := range []struct {
+		name    string
+		handler gin.HandlerFunc
+		status  int
+	}{
+		{"platform admin endpoint", GetPlatformTaskArtifacts, http.StatusOK},
+		{"ordinary endpoint retains scope", GetDashboardTaskArtifacts, http.StatusNotFound},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Set("id", 99)
+			c.Set("role", common.RoleAdminUser)
+			c.Params = gin.Params{{Key: "task_id", Value: task.TaskID}}
+			c.Request = httptest.NewRequest(http.MethodGet, "/artifacts", nil)
+			test.handler(c)
+			assert.Equal(t, test.status, recorder.Code)
+		})
+	}
+}
+
 func TestTaskArtifactAccessRejectsAmbiguousHistoricalTaskID(t *testing.T) {
 	task := setupGenericTaskTest(t)
 	task.Action = constant.TaskActionTextToVideo

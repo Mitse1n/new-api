@@ -89,6 +89,21 @@ func GetDashboardTaskArtifacts(c *gin.Context) {
 	writeTaskArtifacts(c, task, true)
 }
 
+// GetPlatformTaskArtifacts is reachable only through the platform admin route.
+// Ordinary dashboard and relay endpoints retain their resource scope.
+func GetPlatformTaskArtifacts(c *gin.Context) {
+	task, exists, err := model.GetUniqueByOnlyTaskId(c.Param("task_id"))
+	if err != nil {
+		writeTaskArtifactError(c, http.StatusInternalServerError, "artifact_internal_error", "Failed to query task")
+		return
+	}
+	if !exists || task == nil {
+		writeTaskArtifactError(c, http.StatusNotFound, "artifact_not_found", "Task or artifact not found")
+		return
+	}
+	writeTaskArtifacts(c, task, true)
+}
+
 func writeTaskArtifacts(c *gin.Context, task *model.Task, dashboard bool) {
 	c.Header("Cache-Control", "private, no-store")
 	artifacts, err := projectTaskArtifacts(task)

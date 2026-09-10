@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -22,6 +23,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -29,14 +32,28 @@ func setupOriginTaskDB(t *testing.T) {
 	t.Helper()
 	previousDB := model.DB
 	previousType := common.MainDatabaseType()
-	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	var dialector gorm.Dialector = sqlite.Open(":memory:")
+	if dsn := os.Getenv("TENANCY_TEST_MYSQL_DSN"); dsn != "" {
+		dialector = mysql.Open(dsn)
+	}
+	if dsn := os.Getenv("TENANCY_TEST_POSTGRES_DSN"); dsn != "" {
+		dialector = postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true})
+	}
+	database, err := gorm.Open(dialector, &gorm.Config{})
 	require.NoError(t, err)
+	// External DSNs must point to disposable, isolated test databases.
+	if dialector.Name() != "sqlite" {
+		require.NoError(t, database.Migrator().DropTable(&model.Task{}, &model.Channel{}))
+	}
 	require.NoError(t, database.AutoMigrate(&model.Task{}, &model.Channel{}))
 	model.DB = database
-	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
+	common.SetMainDatabaseType(common.DatabaseType(database.Dialector.Name()))
 	t.Cleanup(func() {
 		model.DB = previousDB
 		common.SetMainDatabaseType(previousType)
+		sqlDB, err := database.DB()
+		require.NoError(t, err)
+		require.NoError(t, sqlDB.Close())
 	})
 }
 
@@ -497,4 +514,37 @@ func TestApplyChannelPinLocksOnlySameChannelRetry(t *testing.T) {
 	tokenInfo := &relaycommon.RelayInfo{TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
 	require.Nil(t, relay.ApplyChannelPin(tokenOnly, tokenInfo))
 	assert.Nil(t, tokenInfo.LockedChannel)
+}
+
+func TestOriginTaskIntentRejectsDifferentOrganizationScope(t *testing.T) {
+	setupOriginTaskDB(t)
+	channel := insertOriginTaskChannel(t, common.ChannelStatusEnabled)
+	task := insertOriginOwnedTask(t, "scope-origin", 7, channel.Id, "origin-plugin")
+	task.Properties.OriginModelName = "source-model"
+	require.NoError(t, model.DB.Save(task).Error)
+	for _, test := range []struct {
+		name              string
+		stored, requested int
+		allowed           bool
+	}{
+		{"personal", 0, 0, true}, {"same organization", 19, 19, true},
+		{"personal to organization", 0, 19, false}, {"organization to personal", 19, 0, false}, {"different organization", 19, 23, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			require.NoError(t, model.DB.Model(task).Update("org_id", test.stored).Error)
+			c := originTaskTestContext(7)
+			c.Set("org_id", test.requested)
+			c.Params = gin.Params{{Key: "task_id", Value: task.TaskID}}
+			common.SetContextKey(c, constant.ContextKeyTokenModelLimitEnabled, true)
+			err := applyOriginTaskIntent(c, map[string]any{"originTaskIds": []any{task.TaskID}}, jsplugin.Meta{Key: "origin-plugin", ChannelTypes: []int{constant.ChannelTypeDoubaoVideo}})
+			if test.allowed {
+				assert.Nil(t, err)
+				assert.Equal(t, "source-model", getTaskOriginModelName(c))
+			} else {
+				require.NotNil(t, err)
+				assert.Equal(t, "origin_task_not_found", err.Code)
+				assert.Empty(t, getTaskOriginModelName(c))
+			}
+		})
+	}
 }

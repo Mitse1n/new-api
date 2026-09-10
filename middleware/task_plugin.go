@@ -1070,7 +1070,7 @@ func applyOriginTaskIntent(c *gin.Context, intent map[string]any, meta pluginrun
 	tasks := make([]*model.Task, 0, len(ids))
 	channelID := 0
 	for _, id := range ids {
-		task, exist, err := model.GetByTaskId(userID, id)
+		task, exist, err := model.GetScopedTask(model.ResourceScope{OrgID: c.GetInt("org_id"), UserID: userID}, id)
 		if err != nil {
 			return &originTaskIntentError{Code: "origin_task_not_found", Message: "origin task not found or not owned by you", StatusCode: http.StatusInternalServerError}
 		}

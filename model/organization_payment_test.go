@@ -158,3 +158,62 @@ func TestAbandonedSubscriptionCheckoutReleasesPurchaseLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestOrganizationRedemptionLogMatchesCreditedWallet(t *testing.T) {
+	db, org, users := organizationBillingFixture(t)
+	require.NoError(t, db.Migrator().DropTable(&Redemption{}))
+	require.NoError(t, db.AutoMigrate(&Redemption{}))
+	for _, orgID := range []int{0, org.Id} {
+		code := Redemption{Key: fmt.Sprintf("review-redeem-%d", orgID), Quota: 100, Status: common.RedemptionCodeStatusEnabled}
+		require.NoError(t, code.Insert())
+		quota, err := Redeem(code.Key, users[0].Id, orgID)
+		require.NoError(t, err)
+		assert.Equal(t, 100, quota)
+		var log Log
+		require.NoError(t, db.Where("type = ?", LogTypeTopup).Order("id DESC").First(&log).Error)
+		assert.Equal(t, orgID, log.OrgId)
+		assert.Equal(t, users[0].Id, log.UserId)
+		require.NoError(t, db.First(&users[0], users[0].Id).Error)
+		assert.Equal(t, 1099, users[0].Quota)
+		require.NoError(t, db.First(org, org.Id).Error)
+		if orgID == 0 {
+			assert.Equal(t, int64(1000), org.Quota)
+		} else {
+			assert.Equal(t, int64(1100), org.Quota)
+		}
+	}
+}
+
+func TestOrganizationQuotaAggregationPreservesLegacyPersonalBucket(t *testing.T) {
+	db := organizationTestDatabase(t)
+	previous := CacheQuotaData
+	CacheQuotaData = make(map[string]*QuotaData)
+	t.Cleanup(func() { CacheQuotaData = previous })
+	legacy := QuotaData{UserID: 7, Username: "alice", ModelName: "model", CreatedAt: 3600, Count: 2, Quota: 20, TokenUsed: 4}
+	require.NoError(t, db.Create(&legacy).Error)
+	require.NoError(t, db.Model(&legacy).Update("org_id", nil).Error)
+	team := QuotaData{OrgId: 19, UserID: 7, Username: "alice", ModelName: "model", CreatedAt: 3600, Count: 3, Quota: 30, TokenUsed: 6}
+	require.NoError(t, db.Create(&team).Error)
+	for _, orgID := range []int{0, 19} {
+		LogQuotaData(QuotaDataLogParams{OrgId: orgID, UserID: 7, Username: "alice", ModelName: "model", CreatedAt: 3601, Quota: 10, TokenUsed: 2})
+	}
+	SaveQuotaDataCache()
+	var rows []QuotaData
+	require.NoError(t, db.Order("id").Find(&rows).Error)
+	require.Len(t, rows, 2)
+	assert.Equal(t, legacy.Id, rows[0].Id)
+	assert.Equal(t, 30, rows[0].Quota)
+	assert.Equal(t, 3, rows[0].Count)
+	assert.Equal(t, 40, rows[1].Quota)
+	assert.Equal(t, 4, rows[1].Count)
+	// Deployments may already contain both NULL and zero buckets. Increment only
+	// one matching bucket, otherwise each new charge is counted twice.
+	duplicate := legacy
+	duplicate.Id, duplicate.OrgId, duplicate.Quota = 0, 0, 10
+	require.NoError(t, db.Create(&duplicate).Error)
+	LogQuotaData(QuotaDataLogParams{UserID: 7, Username: "alice", ModelName: "model", CreatedAt: 3601, Quota: 10})
+	SaveQuotaDataCache()
+	var total int64
+	require.NoError(t, db.Model(&QuotaData{}).Scopes((ResourceScope{UserID: 7}).Apply).Select("SUM(quota)").Scan(&total).Error)
+	assert.Equal(t, int64(50), total)
+}

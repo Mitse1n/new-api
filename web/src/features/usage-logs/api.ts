@@ -150,10 +150,10 @@ const taskArtifactRequestConfig = {
   skipErrorHandler: true,
 } satisfies ApiRequestConfig
 
-export async function getTaskArtifacts(taskId: string) {
+export async function getTaskArtifacts(taskId: string, platform = false) {
   const response = await api.get<TaskArtifactsResponse>(
-    `/api/task/${encodeURIComponent(taskId)}/artifacts`,
-    taskArtifactRequestConfig
+    `${platform ? '/api/platform/tasks' : '/api/task'}/${encodeURIComponent(taskId)}/artifacts`,
+    { ...taskArtifactRequestConfig, skipOrganizationContext: platform }
   )
   return parseTaskArtifactsResponse(response.data)
 }

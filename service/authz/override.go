@@ -24,7 +24,7 @@ func SetUserPermissions(userID int, permissions PermissionsMap) error {
 	}
 
 	for resource, actions := range permissions {
-		if !isKnownResource(resource) {
+		if !isPlatformResource(resource) {
 			continue
 		}
 		if _, err := e.RemoveFilteredPolicy(0, UserSubject(userID), "*", resource); err != nil {
@@ -46,7 +46,7 @@ func SetUserPermissionsInTx(tx *gorm.DB, userID int, permissions PermissionsMap)
 	}
 
 	for resource, actions := range permissions {
-		if !isKnownResource(resource) {
+		if !isPlatformResource(resource) {
 			continue
 		}
 		if err := tx.Where("ptype = ? AND v0 = ? AND v1 = ? AND v2 = ?", "p", UserSubject(userID), "*", resource).Delete(&model.CasbinRule{}).Error; err != nil {
@@ -73,7 +73,7 @@ func ClearUserPermissions(userID int) error {
 		return fmt.Errorf("authz enforcer is not initialized")
 	}
 
-	for _, resource := range registry {
+	for _, resource := range Catalog() {
 		if _, err := e.RemoveFilteredPolicy(0, UserSubject(userID), "*", resource.Resource); err != nil {
 			return err
 		}
@@ -82,7 +82,7 @@ func ClearUserPermissions(userID int) error {
 }
 
 func ClearUserPermissionsInTx(tx *gorm.DB, userID int) error {
-	for _, resource := range registry {
+	for _, resource := range Catalog() {
 		if err := tx.Where("ptype = ? AND v0 = ? AND v1 = ? AND v2 = ?", "p", UserSubject(userID), "*", resource.Resource).Delete(&model.CasbinRule{}).Error; err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func ExplicitUserOverrides(userID int) PermissionsMap {
 	}
 
 	result := PermissionsMap{}
-	for _, resource := range registry {
+	for _, resource := range Catalog() {
 		policies, err := e.GetFilteredPolicy(0, UserSubject(userID), "*", resource.Resource)
 		if err != nil {
 			return PermissionsMap{}

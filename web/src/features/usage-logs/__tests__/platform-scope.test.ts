@@ -25,6 +25,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useOrganizationStore } from '@/stores/organization-store'
 
 import {
+  getTaskArtifacts,
   getAllLogs,
   getUserLogs,
   getAllTaskLogs,
@@ -153,4 +154,23 @@ test('personal and platform dashboard requests use distinct endpoints and scopes
   expect(requests[0].headers['X-Org-Id']).toBe('10')
   expect(requests[1].url).toBe('/api/data')
   expect(requests[1].headers['X-Org-Id']).toBeUndefined()
+})
+
+test('platform artifact requests use the platform endpoint without a selected organization', async () => {
+  api.defaults.adapter = async (config) => {
+    requests.push(config)
+    return {
+      config,
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: { success: true, data: { task_id: 'task-1', artifacts: [] } },
+    }
+  }
+  await getTaskArtifacts('task-1', true)
+  expect(requests[0].url).toBe('/api/platform/tasks/task-1/artifacts')
+  expect(requests[0].headers['X-Org-Id']).toBeUndefined()
+  await getTaskArtifacts('task-1', false)
+  expect(requests[1].url).toBe('/api/task/task-1/artifacts')
+  expect(requests[1].headers['X-Org-Id']).toBe('10')
 })

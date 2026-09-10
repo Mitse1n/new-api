@@ -72,7 +72,11 @@ func SubscriptionRequestWaffoPay(c *gin.Context) {
 	if setting.WaffoNotifyUrl != "" {
 		notifyURL = setting.WaffoNotifyUrl
 	}
-	returnURL := paymentReturnPath("/organization/plans")
+	returnPath := "/wallet"
+	if purchase.OrgId > 0 {
+		returnPath = "/organization/plans"
+	}
+	returnURL := paymentReturnPath(returnPath)
 	params := &order.CreateOrderParams{PaymentRequestID: tradeNo, MerchantOrderID: tradeNo,
 		OrderAmount: decimal.NewFromFloat(purchase.Money).StringFixed(2), OrderCurrency: "USD",
 		OrderDescription: plan.Title, OrderRequestedAt: time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), NotifyURL: notifyURL,
