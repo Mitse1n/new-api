@@ -308,7 +308,7 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 func RelayMidjourneyTaskImageSeed(c *gin.Context) *dto.MidjourneyResponse {
 	taskId := c.Param("id")
 	userId := c.GetInt("id")
-	originTask := model.GetByMJId(userId, taskId, c.GetInt("org_id"))
+	originTask := model.GetByMJId(model.ResourceScope{UserID: userId, OrgID: c.GetInt("org_id")}, taskId)
 	if originTask == nil {
 		return service.MidjourneyErrorWrapper(constant.MjRequestError, "task_no_found")
 	}
@@ -345,7 +345,7 @@ func RelayMidjourneyTask(c *gin.Context, relayMode int) *dto.MidjourneyResponse 
 	switch relayMode {
 	case relayconstant.RelayModeMidjourneyTaskFetch:
 		taskId := c.Param("id")
-		originTask := model.GetByMJId(userId, taskId, c.GetInt("org_id"))
+		originTask := model.GetByMJId(model.ResourceScope{UserID: userId, OrgID: c.GetInt("org_id")}, taskId)
 		if originTask == nil {
 			return &dto.MidjourneyResponse{
 				Code:        4,
@@ -373,7 +373,7 @@ func RelayMidjourneyTask(c *gin.Context, relayMode int) *dto.MidjourneyResponse 
 		}
 		var tasks []dto.MidjourneyDto
 		if len(condition.IDs) != 0 {
-			originTasks := model.GetByMJIds(userId, condition.IDs, c.GetInt("org_id"))
+			originTasks := model.GetByMJIds(model.ResourceScope{UserID: userId, OrgID: c.GetInt("org_id")}, condition.IDs)
 			for _, originTask := range originTasks {
 				midjourneyTask := coverMidjourneyTaskDto(c, originTask)
 				tasks = append(tasks, midjourneyTask)
@@ -477,7 +477,7 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 			mjId = midjRequest.TaskId
 		}
 
-		originTask := model.GetByMJId(relayInfo.UserId, mjId, relayInfo.OrgId)
+		originTask := model.GetByMJId(model.ResourceScope{UserID: relayInfo.UserId, OrgID: relayInfo.OrgId}, mjId)
 		if originTask == nil {
 			return service.MidjourneyErrorWrapper(constant.MjRequestError, "task_not_found")
 		} else { //原任务的Status=SUCCESS，则可以做放大UPSCALE、变换VARIATION等动作，此时必须使用原来的请求地址才能正确处理

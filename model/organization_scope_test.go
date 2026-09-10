@@ -13,7 +13,7 @@ func TestOrganizationScopeRejectsMissingOrganizationAcrossResourceTypes(t *testi
 	db := organizationTestDatabase(t)
 	resources := []any{
 		&Token{}, &Log{}, &TopUp{}, &UserSubscription{}, &SubscriptionOrder{},
-		&Task{}, &Midjourney{}, &Redemption{}, &QuotaData{}, &OrganizationMember{},
+		&Task{}, &Midjourney{}, &QuotaData{}, &OrganizationMember{},
 		&OrganizationInvite{}, &OrganizationTransfer{}, &OrganizationAudit{},
 		&OrganizationCharge{}, &OrganizationNotification{},
 	}
@@ -25,12 +25,7 @@ func TestOrganizationScopeRejectsMissingOrganizationAcrossResourceTypes(t *testi
 				item := reflect.New(reflect.TypeOf(resource).Elem())
 				fields := item.Elem()
 				field := fields.FieldByName("OrgId")
-				if field.Kind() == reflect.Pointer {
-					value := orgID
-					field.Set(reflect.ValueOf(&value))
-				} else {
-					field.SetInt(int64(orgID))
-				}
+				field.SetInt(int64(orgID))
 				// Valid, deterministic unique identities let the same real query contract
 				// run against every persistence model on each supported SQL dialect.
 				for _, name := range []string{"Key", "RequestId", "TradeNo", "EventKey"} {

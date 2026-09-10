@@ -44,7 +44,6 @@ import {
   paySubscriptionCreem,
   paySubscriptionEpay,
   paySubscriptionWaffoPancake,
-  paySubscriptionWaffo,
   paySubscriptionBalance,
 } from '../../api'
 import { formatDuration, formatResetPeriod } from '../../lib'
@@ -61,7 +60,6 @@ interface Props {
   plan: PlanRecord | null
   enableStripe?: boolean
   enableCreem?: boolean
-  enableWaffo?: boolean
   enableWaffoPancake?: boolean
   enableOnlineTopUp?: boolean
   epayMethods?: PaymentMethod[]
@@ -95,8 +93,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
     props.enableWaffoPancake && !!plan.waffo_pancake_product_id
   const hasEpay =
     props.enableOnlineTopUp && (props.epayMethods || []).length > 0
-  const hasAnyPayment =
-    props.enableWaffo || hasStripe || hasCreem || hasWaffoPancake || hasEpay
+  const hasAnyPayment = hasStripe || hasCreem || hasWaffoPancake || hasEpay
   const selectedEpayMethodLabel =
     (props.epayMethods || []).find((m) => m.type === selectedEpayMethod)
       ?.name ||
@@ -227,23 +224,6 @@ export function SubscriptionPurchaseDialog(props: Props) {
             : t('Payment request failed')
         )
       }
-    } catch {
-      toast.error(t('Payment request failed'))
-    } finally {
-      setPaying(false)
-    }
-  }
-
-  const handlePayWaffo = async () => {
-    setPaying(true)
-    try {
-      const result = await paySubscriptionWaffo({ plan_id: plan.id })
-      if (result.message !== 'success' || !result.data?.checkout_url) {
-        toast.error(t('Payment request failed'))
-        return
-      }
-      window.open(result.data.checkout_url, '_blank', 'noopener,noreferrer')
-      props.onOpenChange(false)
     } catch {
       toast.error(t('Payment request failed'))
     } finally {
@@ -397,10 +377,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
             <p className='text-muted-foreground text-xs'>
               {t('Select payment method')}
             </p>
-            {(props.enableWaffo ||
-              hasStripe ||
-              hasCreem ||
-              hasWaffoPancake) && (
+            {(hasStripe || hasCreem || hasWaffoPancake) && (
               <div className='grid grid-cols-2 gap-2 sm:flex'>
                 {hasStripe && (
                   <Button
@@ -420,16 +397,6 @@ export function SubscriptionPurchaseDialog(props: Props) {
                     disabled={paying || limitReached}
                   >
                     Creem
-                  </Button>
-                )}
-                {props.enableWaffo && (
-                  <Button
-                    variant='outline'
-                    className='flex-1'
-                    onClick={handlePayWaffo}
-                    disabled={paying || limitReached}
-                  >
-                    Waffo
                   </Button>
                 )}
                 {hasWaffoPancake && (

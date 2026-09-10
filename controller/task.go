@@ -402,12 +402,11 @@ func GetAllTask(c *gin.Context) {
 
 func GetUserTask(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	userID := c.GetInt("id")
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	queryParams := model.SyncTaskQueryParams{Platform: constant.TaskPlatform(c.Query("platform")), TaskID: c.Query("task_id"), Status: c.Query("status"), Action: c.Query("action"), StartTimestamp: startTimestamp, EndTimestamp: endTimestamp}
-	items := model.TaskGetAllUserTask(userID, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams, usageScope(c))
-	pageInfo.SetTotal(int(model.TaskCountAllUserTask(userID, queryParams, usageScope(c))))
+	items := model.TaskGetAllUserTask(usageScope(c), pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
+	pageInfo.SetTotal(int(model.TaskCountAllUserTask(usageScope(c), queryParams)))
 	pageInfo.SetItems(tasksToDto(items, false, common.RoleCommonUser))
 	common.ApiSuccess(c, pageInfo)
 }

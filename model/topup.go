@@ -12,7 +12,7 @@ import (
 )
 
 type TopUp struct {
-	OrgId           int     `json:"org_id" gorm:"index:idx_org_topup,priority:1"`
+	OrgId           int     `json:"-" gorm:"index:idx_org_topup,priority:1"`
 	Id              int     `json:"id"`
 	UserId          int     `json:"user_id" gorm:"index"`
 	Amount          int64   `json:"amount"`
@@ -67,15 +67,15 @@ func topUpQuotaMaxCurrent(creditedQuota int) (int, error) {
 // ValidateTopUpQuotaCapacity performs the user-facing pre-payment check. The
 // settlement path repeats the same invariant with an atomic conditional
 // update, because the wallet balance can change after checkout creation.
-func ValidateTopUpQuotaCapacity(userId int, creditedQuota int, orgIDs ...int) error {
+func ValidateTopUpQuotaCapacity(userId int, creditedQuota int, orgID int) error {
 	maxCurrentQuota, err := topUpQuotaMaxCurrent(creditedQuota)
 	if err != nil {
 		return err
 	}
 
-	if len(orgIDs) > 0 && orgIDs[0] > 0 {
+	if orgID > 0 {
 		var org Organization
-		if err := DB.Select("quota").Where("id = ?", orgIDs[0]).First(&org).Error; err != nil {
+		if err := DB.Select("quota").Where("id = ?", orgID).First(&org).Error; err != nil {
 			return err
 		}
 		if org.Quota > int64(maxCurrentQuota) {
@@ -97,10 +97,10 @@ func ValidateTopUpQuotaCapacity(userId int, creditedQuota int, orgIDs ...int) er
 // creditTopUpQuota atomically enforces the wallet ceiling while adding quota.
 // Keeping the predicate and increment in one UPDATE prevents two
 // concurrent callbacks from both passing a separate read/check.
-func creditTopUpQuota(tx *gorm.DB, userId int, creditedQuota int, updates map[string]interface{}, orgIDs ...int) error {
-	if len(orgIDs) > 0 && orgIDs[0] > 0 {
+func creditTopUpQuota(tx *gorm.DB, userId int, creditedQuota int, updates map[string]interface{}, orgID int) error {
+	if orgID > 0 {
 		var org Organization
-		if err := lockForUpdate(tx).Where("id = ?", orgIDs[0]).First(&org).Error; err != nil {
+		if err := lockForUpdate(tx).Where("id = ?", orgID).First(&org).Error; err != nil {
 			return err
 		}
 		if len(updates) > 0 {
@@ -108,7 +108,7 @@ func creditTopUpQuota(tx *gorm.DB, userId int, creditedQuota int, updates map[st
 				return err
 			}
 		}
-		return creditOrganizationTopUp(tx, orgIDs[0], creditedQuota)
+		return creditOrganizationTopUp(tx, orgID, creditedQuota)
 	}
 	maxCurrentQuota, err := topUpQuotaMaxCurrent(creditedQuota)
 	if err != nil {
@@ -325,42 +325,6 @@ func topUpQueryCutoff() int64 {
 	return common.GetTimestamp() - topUpQueryWindowSeconds
 }
 
-func GetUserTopUps(userId int, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
-	// Start transaction
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	cutoff := topUpQueryCutoff()
-
-	// Get total count within transaction
-	err = tx.Model(&TopUp{}).Where("user_id = ? AND create_time >= ?", userId, cutoff).Count(&total).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// Get paginated topups within same transaction
-	err = tx.Where("user_id = ? AND create_time >= ?", userId, cutoff).Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&topups).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// Commit transaction
-	if err = tx.Commit().Error; err != nil {
-		return nil, 0, err
-	}
-
-	return topups, total, nil
-}
-
 // GetAllTopUps 获取全平台的充值记录（管理员使用，不限制时间窗口）
 func GetAllTopUps(pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
 	tx := DB.Begin()
@@ -393,46 +357,6 @@ func GetAllTopUps(pageInfo *common.PageInfo) (topups []*TopUp, total int64, err 
 // searchTopUpCountHardLimit 搜索充值记录时 COUNT 的安全上限，
 // 防止对超大表执行无界 COUNT 触发 DoS。
 const searchTopUpCountHardLimit = 10000
-
-// SearchUserTopUps 按订单号搜索某用户的充值记录
-func SearchUserTopUps(userId int, keyword string, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	query := tx.Model(&TopUp{}).Where("user_id = ? AND create_time >= ?", userId, topUpQueryCutoff())
-	if keyword != "" {
-		pattern, perr := sanitizeLikePattern(keyword)
-		if perr != nil {
-			tx.Rollback()
-			return nil, 0, perr
-		}
-		query = query.Where("trade_no LIKE ? ESCAPE '!'", pattern)
-	}
-
-	if err = query.Limit(searchTopUpCountHardLimit).Count(&total).Error; err != nil {
-		tx.Rollback()
-		common.SysError("failed to count search topups: " + err.Error())
-		return nil, 0, errors.New("搜索充值记录失败")
-	}
-
-	if err = query.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&topups).Error; err != nil {
-		tx.Rollback()
-		common.SysError("failed to search topups: " + err.Error())
-		return nil, 0, errors.New("搜索充值记录失败")
-	}
-
-	if err = tx.Commit().Error; err != nil {
-		return nil, 0, err
-	}
-	return topups, total, nil
-}
 
 // SearchAllTopUps 按订单号搜索全平台充值记录（管理员使用，不限制时间窗口）
 func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {

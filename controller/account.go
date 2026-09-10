@@ -19,7 +19,7 @@ func GetAccountSummary(c *gin.Context) {
 		return
 	}
 	scope := model.ResourceScope{UserID: userID}
-	var subscriptions []model.UserSubscription
+	subscriptions := make([]model.UserSubscription, 0)
 	if err := scope.Apply(model.DB).Order("id desc").Find(&subscriptions).Error; err != nil {
 		common.ApiError(c, err)
 		return
@@ -38,10 +38,8 @@ func GetAccountSummary(c *gin.Context) {
 		return
 	}
 	available := max(int64(0), int64(quota))
-	publicSubscriptions := make([]subscriptionResponse, 0, len(subscriptions))
 	for i := range subscriptions {
 		sub := &subscriptions[i]
-		publicSubscriptions = append(publicSubscriptions, subscriptionResponse{UserSubscription: sub})
 		if sub.Status == "active" && sub.EndTime > common.GetTimestamp() && !sub.AllowWalletOverflow {
 			available = 0
 		}
@@ -57,5 +55,5 @@ func GetAccountSummary(c *gin.Context) {
 	}
 	common.ApiSuccess(c, gin.H{"available_quota": available, "request_count": usage.RequestCount,
 		"quota": quota, "used_quota": usage.UsedQuota, "group": user.Group,
-		"subscriptions": publicSubscriptions, "key_count": keyCount})
+		"subscriptions": subscriptions, "key_count": keyCount})
 }

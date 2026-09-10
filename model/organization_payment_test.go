@@ -217,3 +217,19 @@ func TestOrganizationQuotaAggregationPreservesLegacyPersonalBucket(t *testing.T)
 	require.NoError(t, db.Model(&QuotaData{}).Scopes((ResourceScope{UserID: 7}).Apply).Select("SUM(quota)").Scan(&total).Error)
 	assert.Equal(t, int64(50), total)
 }
+
+func TestDeletingOrganizationPreservesPlatformRedemptionCodes(t *testing.T) {
+	db, org, _ := organizationBillingFixture(t)
+	require.NoError(t, db.AutoMigrate(&Redemption{}, &CasbinRule{}))
+	code := Redemption{Key: "global-code", Name: "global", Quota: 100, Status: common.RedemptionCodeStatusEnabled}
+	require.NoError(t, db.Create(&code).Error)
+	require.NoError(t, db.Model(org).Update("status", OrganizationDeleting).Error)
+	require.NoError(t, db.Delete(org).Error)
+	require.NoError(t, CleanupDeletedOrganizations())
+	require.NoError(t, db.First(&code, code.Id).Error)
+	assert.Equal(t, common.RedemptionCodeStatusEnabled, code.Status)
+	assert.Equal(t, 100, code.Quota)
+	var count int64
+	require.NoError(t, db.Unscoped().Model(&Organization{}).Where("id = ?", org.Id).Count(&count).Error)
+	assert.Zero(t, count)
+}

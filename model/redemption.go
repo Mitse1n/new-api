@@ -12,7 +12,6 @@ import (
 )
 
 type Redemption struct {
-	OrgId        *int           `json:"org_id" gorm:"index"` // nil denotes a platform-wide code.
 	Id           int            `json:"id"`
 	UserId       int            `json:"user_id"`
 	Key          string         `json:"key" gorm:"type:char(32);uniqueIndex"`
@@ -135,7 +134,7 @@ func GetRedemptionById(id int) (*Redemption, error) {
 	return &redemption, err
 }
 
-func Redeem(key string, userId int, orgIDs ...int) (quota int, err error) {
+func Redeem(key string, userId int, orgID int) (quota int, err error) {
 	if key == "" {
 		return 0, errors.New("未提供兑换码")
 	}
@@ -143,10 +142,6 @@ func Redeem(key string, userId int, orgIDs ...int) (quota int, err error) {
 		return 0, errors.New("无效的 user id")
 	}
 	redemption := &Redemption{}
-	orgID := 0
-	if len(orgIDs) > 0 {
-		orgID = orgIDs[0]
-	}
 
 	keyCol := "`key`"
 	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
@@ -156,9 +151,6 @@ func Redeem(key string, userId int, orgIDs ...int) (quota int, err error) {
 	err = DB.Transaction(func(tx *gorm.DB) error {
 		err := lockForUpdate(tx).Where(keyCol+" = ?", key).First(redemption).Error
 		if err != nil {
-			return errors.New("无效的兑换码")
-		}
-		if redemption.OrgId != nil && *redemption.OrgId != orgID {
 			return errors.New("无效的兑换码")
 		}
 		if orgID > 0 {

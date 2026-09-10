@@ -658,7 +658,6 @@ export function SubscriptionPlansCard({
           }
         }}
         plan={selectedPlan}
-        enableWaffo={!!topupInfo?.enable_waffo_topup}
         enableStripe={enableStripe}
         enableCreem={enableCreem}
         enableWaffoPancake={enableWaffoPancake}

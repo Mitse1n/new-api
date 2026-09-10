@@ -39,9 +39,8 @@ type tokenRequest struct {
 
 type tokenResponse struct {
 	*model.Token
-	OrgId       *int     `json:"org_id,omitempty"`
-	AutoGroups  []string `json:"auto_groups"`
-	CreatorName string   `json:"creator_name,omitempty"`
+	OrgId      *int     `json:"org_id,omitempty"`
+	AutoGroups []string `json:"auto_groups"`
 }
 
 func maxTokenQuota() int {
@@ -73,27 +72,8 @@ func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
 
 func buildMaskedTokenResponses(tokens []*model.Token) []*tokenResponse {
 	maskedTokens := make([]*tokenResponse, 0, len(tokens))
-	ids := make([]int, 0, len(tokens))
-	for _, token := range tokens {
-		ids = append(ids, token.UserId)
-	}
-	var creators []model.User
-	if len(ids) > 0 {
-		if err := model.DB.Unscoped().Select("id", "username", "display_name").Where("id IN ?", ids).Find(&creators).Error; err != nil {
-			common.SysError("token creators: " + err.Error())
-		}
-	}
-	names := make(map[int]string, len(creators))
-	for _, creator := range creators {
-		name := creator.DisplayName
-		if name == "" {
-			name = creator.Username
-		}
-		names[creator.Id] = name
-	}
 	for _, token := range tokens {
 		response := buildMaskedTokenResponse(token)
-		response.CreatorName = names[token.UserId]
 		maskedTokens = append(maskedTokens, response)
 	}
 	return maskedTokens
@@ -356,14 +336,12 @@ func AddToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	autoGroups, _ := cleanToken.GetAutoGroups() // Already validated before insertion.
 	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data": &struct {
-			*model.Token
-			OrgId *int `json:"org_id,omitempty"`
-		}{Token: &cleanToken},
+		"data":    &tokenResponse{Token: &cleanToken, AutoGroups: autoGroups},
 	})
 }
 

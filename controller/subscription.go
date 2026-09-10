@@ -84,8 +84,8 @@ func GetSubscriptionSelf(c *gin.Context) {
 
 	common.ApiSuccess(c, gin.H{
 		"billing_preference": pref,
-		"subscriptions":      subscriptionSummaryResponses(activeSubscriptions), // all active subscriptions
-		"all_subscriptions":  subscriptionSummaryResponses(allSubscriptions),    // all subscriptions including expired
+		"subscriptions":      activeSubscriptions, // all active subscriptions
+		"all_subscriptions":  allSubscriptions,    // all subscriptions including expired
 	})
 }
 
@@ -431,7 +431,7 @@ func AdminListUserSubscriptions(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, subscriptionSummaryResponses(subs))
+	common.ApiSuccess(c, subs)
 }
 
 type AdminCreateUserSubscriptionRequest struct {

@@ -299,14 +299,15 @@ func GetAllMidjourney(c *gin.Context) {
 		}
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(midjourneyResponses(items))
+	if items == nil {
+		items = []*model.Midjourney{}
+	}
+	pageInfo.SetItems(items)
 	common.ApiSuccess(c, pageInfo)
 }
 
 func GetUserMidjourney(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-
-	userId := c.GetInt("id")
 
 	queryParams := model.TaskQueryParams{
 		MjID:           c.Query("mj_id"),
@@ -314,8 +315,8 @@ func GetUserMidjourney(c *gin.Context) {
 		EndTimestamp:   c.Query("end_timestamp"),
 	}
 
-	items := model.GetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams, usageScope(c))
-	total := model.CountAllUserTask(userId, queryParams, usageScope(c))
+	items := model.GetAllUserTask(usageScope(c), pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
+	total := model.CountAllUserTask(usageScope(c), queryParams)
 
 	if setting.MjForwardUrlEnabled {
 		for i, midjourney := range items {
@@ -324,6 +325,9 @@ func GetUserMidjourney(c *gin.Context) {
 		}
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(midjourneyResponses(items))
+	if items == nil {
+		items = []*model.Midjourney{}
+	}
+	pageInfo.SetItems(items)
 	common.ApiSuccess(c, pageInfo)
 }

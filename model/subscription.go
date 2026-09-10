@@ -321,7 +321,7 @@ func GetSubscriptionOrderByTradeNo(tradeNo string) *SubscriptionOrder {
 // User subscription instance
 type UserSubscription struct {
 	PlanSnapshot string `json:"-" gorm:"type:text"`
-	OrgId        int    `json:"org_id" gorm:"index:idx_org_usersubscription,priority:1"`
+	OrgId        int    `json:"-" gorm:"index:idx_org_usersubscription,priority:1"`
 	Id           int    `json:"id"`
 	UserId       int    `json:"user_id" gorm:"index;index:idx_user_sub_active,priority:1"`
 	PlanId       int    `json:"plan_id" gorm:"index"`
@@ -489,7 +489,7 @@ func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
 	}
 	var count int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND plan_id = ?", userId, planId).
+		Scopes((ResourceScope{UserID: userId}).Apply).Where("plan_id = ?", planId).
 		Count(&count).Error; err != nil {
 		return 0, err
 	}
@@ -529,8 +529,7 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	}
 	// If another active upgraded subscription exists, keep the current group.
 	var activeSub UserSubscription
-	activeQuery := tx.Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ? AND id <> ? AND upgrade_group <> ''",
-		sub.UserId, "active", now, sub.Id).
+	activeQuery := tx.Scopes((ResourceScope{UserID: sub.UserId}).Apply).Where("status = ? AND end_time > ? AND id <> ? AND upgrade_group <> ''", "active", now, sub.Id).
 		Order("end_time desc, id desc").
 		Limit(1).
 		Find(&activeSub)
@@ -964,7 +963,7 @@ func GetAllActiveUserSubscriptions(userId int) ([]SubscriptionSummary, error) {
 	}
 	now := common.GetTimestamp()
 	var subs []UserSubscription
-	err := DB.Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+	err := DB.Scopes((ResourceScope{UserID: userId}).Apply).Where("status = ? AND end_time > ?", "active", now).
 		Order("end_time desc, id desc").
 		Find(&subs).Error
 	if err != nil {
@@ -982,7 +981,7 @@ func HasActiveUserSubscription(userId int) (bool, error) {
 	now := common.GetTimestamp()
 	var count int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+		Scopes((ResourceScope{UserID: userId}).Apply).Where("status = ? AND end_time > ?", "active", now).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -999,8 +998,7 @@ func UserActiveSubscriptionsAllowWalletOverflow(userId int) (bool, error) {
 	now := common.GetTimestamp()
 	var strictCount int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ? AND allow_wallet_overflow = ?",
-			userId, "active", now, false).
+		Scopes((ResourceScope{UserID: userId}).Apply).Where("status = ? AND end_time > ? AND allow_wallet_overflow = ?", "active", now, false).
 		Count(&strictCount).Error; err != nil {
 		return false, err
 	}
@@ -1013,7 +1011,7 @@ func GetAllUserSubscriptions(userId int) ([]SubscriptionSummary, error) {
 		return nil, errors.New("invalid userId")
 	}
 	var subs []UserSubscription
-	err := DB.Where("(org_id IS NULL OR org_id = 0) AND user_id = ?", userId).
+	err := DB.Scopes((ResourceScope{UserID: userId}).Apply).
 		Order("end_time desc, id desc").
 		Find(&subs).Error
 	if err != nil {
@@ -1166,7 +1164,7 @@ func adminResetUserSubscriptionsByPlanTx(tx *gorm.DB, userId int, plan *Subscrip
 	}
 	var subs []UserSubscription
 	if err := lockForUpdate(tx).
-		Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, plan.Id, "active", now).
+		Scopes((ResourceScope{UserID: userId}).Apply).Where("plan_id = ? AND status = ? AND end_time > ?", plan.Id, "active", now).
 		Order("end_time asc, id asc").
 		Find(&subs).Error; err != nil {
 		return nil, err
@@ -1300,7 +1298,7 @@ func ExpireDueSubscriptions(limit int) (int, error) {
 		cacheGroup := ""
 		err := DB.Transaction(func(tx *gorm.DB) error {
 			res := tx.Model(&UserSubscription{}).
-				Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > 0 AND end_time <= ?", userId, "active", now).
+				Scopes((ResourceScope{UserID: userId}).Apply).Where("status = ? AND end_time > 0 AND end_time <= ?", "active", now).
 				Updates(map[string]interface{}{
 					"status":     "expired",
 					"updated_at": common.GetTimestamp(),
@@ -1312,8 +1310,7 @@ func ExpireDueSubscriptions(limit int) (int, error) {
 
 			// If there's an active upgraded subscription, keep current group.
 			var activeSub UserSubscription
-			activeQuery := tx.Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ? AND upgrade_group <> ''",
-				userId, "active", now).
+			activeQuery := tx.Scopes((ResourceScope{UserID: userId}).Apply).Where("status = ? AND end_time > ? AND upgrade_group <> ''", "active", now).
 				Order("end_time desc, id desc").
 				Limit(1).
 				Find(&activeSub)
@@ -1324,8 +1321,7 @@ func ExpireDueSubscriptions(limit int) (int, error) {
 			// Find the most recently expired subscription that defines a group transition
 			// (an explicit downgrade target or an upgrade snapshot to revert).
 			var lastExpired UserSubscription
-			expiredQuery := tx.Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND (downgrade_group <> '' OR upgrade_group <> '')",
-				userId, "expired").
+			expiredQuery := tx.Scopes((ResourceScope{UserID: userId}).Apply).Where("status = ? AND (downgrade_group <> '' OR upgrade_group <> '')", "expired").
 				Order("end_time desc, id desc").
 				Limit(1).
 				Find(&lastExpired)
@@ -1467,7 +1463,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 				return errors.New("subscription pre-consume already refunded")
 			}
 			var sub UserSubscription
-			if err := tx.Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND id = ?", userId, existing.UserSubscriptionId).First(&sub).Error; err != nil {
+			if err := tx.Scopes((ResourceScope{UserID: userId}).Apply).Where("id = ?", existing.UserSubscriptionId).First(&sub).Error; err != nil {
 				return err
 			}
 			returnValue.UserSubscriptionId = sub.Id
@@ -1480,7 +1476,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 
 		var subs []UserSubscription
 		if err := lockForUpdate(tx).
-			Where("(org_id IS NULL OR org_id = 0) AND user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+			Scopes((ResourceScope{UserID: userId}).Apply).Where("status = ? AND end_time > ?", "active", now).
 			Order("end_time asc, id asc").
 			Find(&subs).Error; err != nil {
 			return errors.New("no active subscription")

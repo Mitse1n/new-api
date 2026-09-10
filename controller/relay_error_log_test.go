@@ -32,7 +32,7 @@ func TestProcessChannelErrorUsesSnapshotWithoutLeakingChannelMetadata(t *testing
 	sqlDB, err := database.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Log{}))
+	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Log{}, &model.Channel{}))
 	model.DB, model.LOG_DB = database, database
 	common.RedisEnabled = false
 	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
@@ -84,10 +84,11 @@ func TestProcessChannelErrorUsesSnapshotWithoutLeakingChannelMetadata(t *testing
 	require.True(t, ok)
 	assert.Equal(t, []interface{}{"101"}, adminInfo["use_channel"])
 
-	logs, total, err := model.GetUserLogs(7, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "")
+	logs, total, err := model.GetAllLogs(model.LogTypeError, 0, 0, "", "", "", 0, 10, 0, "", "", "", (model.ResourceScope{UserID: 7}).Apply)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total)
 	require.Len(t, logs, 1)
+	model.FormatUserLogs(logs, 0)
 	assert.Equal(t, channelSnapshot.ChannelId, logs[0].ChannelId)
 	assert.Empty(t, logs[0].ChannelName)
 	userOther, err := common.StrToMap(logs[0].Other)

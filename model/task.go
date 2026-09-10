@@ -268,15 +268,12 @@ func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) 
 	return t
 }
 
-func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQueryParams, scopes ...ResourceScope) []*Task {
+func TaskGetAllUserTask(scope ResourceScope, startIdx int, num int, queryParams SyncTaskQueryParams) []*Task {
 	var tasks []*Task
 	var err error
 
 	// 初始化查询构建器
-	query := DB.Where("user_id = ?", userId)
-	if len(scopes) > 0 {
-		query = scopes[0].Apply(DB)
-	}
+	query := DB.Scopes(scope.Apply)
 
 	if queryParams.TaskID != "" {
 		query = query.Where("task_id = ?", queryParams.TaskID)
@@ -439,17 +436,14 @@ func GetByTaskId(userId int, taskId string) (*Task, bool, error) {
 	return task, exist, err
 }
 
-func GetByTaskIdsForPlatforms(userID int, platforms []constant.TaskPlatform, taskIDs []string, orgIDs ...int) ([]*Task, error) {
+func GetByTaskIdsForPlatforms(scope ResourceScope, platforms []constant.TaskPlatform, taskIDs []string) ([]*Task, error) {
 	if len(platforms) == 0 || len(taskIDs) == 0 {
 		return nil, nil
 	}
 	var tasks []*Task
-	query := DB
-	if len(orgIDs) > 0 {
-		query = (ResourceScope{OrgID: orgIDs[0], UserID: userID}).Apply(query)
-	}
+	query := DB.Scopes(scope.Apply)
 	err := query.
-		Where("user_id = ? AND platform IN ? AND task_id IN ?", userID, platforms, taskIDs).
+		Where("platform IN ? AND task_id IN ?", platforms, taskIDs).
 		Find(&tasks).Error
 	if err != nil {
 		return nil, err
@@ -603,12 +597,9 @@ func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 }
 
 // TaskCountAllUserTask returns total tasks for given user
-func TaskCountAllUserTask(userId int, queryParams SyncTaskQueryParams, scopes ...ResourceScope) int64 {
+func TaskCountAllUserTask(scope ResourceScope, queryParams SyncTaskQueryParams) int64 {
 	var total int64
-	query := DB.Model(&Task{}).Where("user_id = ?", userId)
-	if len(scopes) > 0 {
-		query = scopes[0].Apply(DB.Model(&Task{}))
-	}
+	query := DB.Model(&Task{}).Scopes(scope.Apply)
 	if queryParams.TaskID != "" {
 		query = query.Where("task_id = ?", queryParams.TaskID)
 	}

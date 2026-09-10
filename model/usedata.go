@@ -11,7 +11,7 @@ import (
 
 // QuotaData 柱状图数据
 type QuotaData struct {
-	OrgId     int    `json:"org_id" gorm:"index:idx_org_quotadata,priority:1"`
+	OrgId     int    `json:"-" gorm:"index:idx_org_quotadata,priority:1"`
 	Id        int    `json:"id"`
 	UserID    int    `json:"user_id" gorm:"index"`
 	Username  string `json:"username" gorm:"index:idx_qdt_model_user_name,priority:2;size:64;default:''"`
@@ -146,17 +146,6 @@ func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (qu
 	err = DB.Table("quota_data").
 		Select("user_id, username, model_name, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
 		Where("username = ? and created_at >= ? and created_at <= ?", username, startTime, endTime).
-		Group("user_id, username, model_name, created_at").
-		Find(&quotaDatas).Error
-	return quotaDatas, err
-}
-
-func GetQuotaDataByUserId(userId int, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
-	var quotaDatas []*QuotaData
-	// 从quota_data表中查询数据
-	err = DB.Table("quota_data").
-		Select("user_id, username, model_name, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
-		Where("user_id = ? and created_at >= ? and created_at <= ?", userId, startTime, endTime).
 		Group("user_id, username, model_name, created_at").
 		Find(&quotaDatas).Error
 	return quotaDatas, err

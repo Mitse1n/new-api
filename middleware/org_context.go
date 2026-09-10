@@ -35,7 +35,7 @@ func OrganizationContext() gin.HandlerFunc {
 			c.AbortWithStatusJSON(status, gin.H{"success": false, "code": "ORG_UNAVAILABLE", "message": "Organization unavailable."})
 			return
 		}
-		if c.GetHeader("X-Org-Id") != "" && org.Kind != model.OrganizationTeam {
+		if org.Kind != model.OrganizationTeam {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "ORG_UNAVAILABLE", "message": "Organization unavailable."})
 			return
 		}

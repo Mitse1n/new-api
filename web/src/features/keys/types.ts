@@ -25,7 +25,6 @@ import { z } from 'zod'
 export const apiKeySchema = z.object({
   id: z.number(),
   user_id: z.number().optional(),
-  creator_name: z.string().optional(),
   org_id: z.number().optional(),
   name: z.string(),
   key: z.string(),

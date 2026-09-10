@@ -237,10 +237,3 @@ export async function getGroups(): Promise<ApiResponse<string[]>> {
   const res = await api.get('/api/group')
   return res.data
 }
-
-export async function paySubscriptionWaffo(
-  data: SubscriptionPayRequest
-): Promise<SubscriptionPayResponse> {
-  const res = await api.post('/api/subscription/waffo/pay', data)
-  return res.data
-}

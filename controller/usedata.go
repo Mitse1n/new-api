@@ -37,10 +37,13 @@ func GetAllQuotaDates(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if dates == nil {
+		dates = []*model.QuotaData{}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    quotaDataResponses(dates),
+		"data":    dates,
 	})
 	return
 }
@@ -53,10 +56,13 @@ func GetQuotaDatesByUser(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if dates == nil {
+		dates = []*model.QuotaData{}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    quotaDataResponses(dates),
+		"data":    dates,
 	})
 }
 
@@ -76,10 +82,13 @@ func GetUserQuotaDates(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if dates == nil {
+		dates = []*model.QuotaData{}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    quotaDataResponses(dates),
+		"data":    dates,
 	})
 	return
 }
