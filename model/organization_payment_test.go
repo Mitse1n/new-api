@@ -2,11 +2,12 @@ package model
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
-	"testing"
 )
 
 func TestOrganizationPaymentsUsePersistedOwnerAndImmutableTerms(t *testing.T) {
@@ -20,8 +21,6 @@ func TestOrganizationPaymentsUsePersistedOwnerAndImmutableTerms(t *testing.T) {
 			require.NoError(t, db.Model(&plan).Updates(map[string]interface{}{"total_amount": 500, "enabled": true}).Error)
 			order := SubscriptionOrder{OrgId: org.Id, UserId: users[0].Id, PlanId: plan.Id, Money: 10, TradeNo: "org-payment-" + provider, PaymentMethod: provider, PaymentProvider: provider, Status: common.TopUpStatusPending}
 			require.NoError(t, order.Insert())
-			// A timeout can race a later signed successful callback.
-			require.NoError(t, ExpireSubscriptionOrder(order.TradeNo, provider))
 			require.NoError(t, db.Model(&plan).Updates(map[string]interface{}{"total_amount": 1, "enabled": false}).Error)
 			assert.ErrorIs(t, CompleteSubscriptionOrder(order.TradeNo, "", "wrong-provider", ""), ErrPaymentMethodMismatch)
 			require.NoError(t, CompleteSubscriptionOrder(order.TradeNo, `{"org_id":9999}`, provider, ""))
@@ -113,7 +112,7 @@ func TestOrganizationBudgetAlertsDeduplicateSettlements(t *testing.T) {
 	assert.ElementsMatch(t, []string{users[0].Email, "finance@example.test", "https://alerts.example.test/budget"}, destinations)
 }
 
-func TestAbandonedSubscriptionCheckoutReleasesPurchaseLimit(t *testing.T) {
+func TestSubscriptionOrderCompletionEnforcesPurchaseLimit(t *testing.T) {
 	for _, team := range []bool{false, true} {
 		t.Run(fmt.Sprint("team=", team), func(t *testing.T) {
 			db, org, users := organizationBillingFixture(t)
@@ -123,38 +122,89 @@ func TestAbandonedSubscriptionCheckoutReleasesPurchaseLimit(t *testing.T) {
 			if team {
 				orgID = org.Id
 			}
-			order := SubscriptionOrder{OrgId: orgID, UserId: users[0].Id, PlanId: plan.Id, Money: 10, TradeNo: "abandoned", PaymentProvider: PaymentProviderEpay, Status: common.TopUpStatusPending}
-			require.NoError(t, order.Insert())
-			validate := func() error {
-				if team {
-					return ValidateOrganizationPlan(db, org, &plan)
-				}
-				return ValidateAccountSubscriptionPlan(db, users[0].Id, &plan)
+			orders := []SubscriptionOrder{
+				{TradeNo: "first", CreateTime: common.GetTimestamp() - 25*3600},
+				{TradeNo: "second"},
+				{TradeNo: "expired"},
+				{TradeNo: "failed"},
 			}
-			assert.Error(t, validate(), "a fresh checkout reserves its purchase slot")
-			require.NoError(t, db.Model(&order).Update("create_time", common.GetTimestamp()-25*3600).Error)
-			assert.NoError(t, validate(), "abandoned checkout must not reserve the slot forever")
-			replacement := SubscriptionOrder{OrgId: orgID, UserId: users[0].Id, PlanId: plan.Id, Money: 10, TradeNo: "replacement", PaymentProvider: PaymentProviderEpay, Status: common.TopUpStatusPending}
-			require.NoError(t, replacement.Insert())
-			require.NoError(t, ExpirePendingSubscriptionOrders())
-			require.NoError(t, ExpirePendingSubscriptionOrders(), "maintenance is idempotent")
-			require.NoError(t, db.First(&order, order.Id).Error)
-			assert.Equal(t, common.TopUpStatusExpired, order.Status)
-			require.NoError(t, db.First(&replacement, replacement.Id).Error)
-			assert.Equal(t, common.TopUpStatusPending, replacement.Status)
-			assert.Error(t, validate(), "the replacement reserves a new slot")
-			// A local deadline cannot discard money already collected upstream.
-			assert.ErrorIs(t, CompleteSubscriptionOrder(order.TradeNo, "", PaymentProviderStripe, ""), ErrPaymentMethodMismatch)
-			require.NoError(t, CompleteSubscriptionOrder(order.TradeNo, "", PaymentProviderEpay, ""))
-			require.NoError(t, CompleteSubscriptionOrder(order.TradeNo, "", PaymentProviderEpay, ""))
-			require.NoError(t, ExpirePendingSubscriptionOrders())
-			require.NoError(t, db.First(&order, order.Id).Error)
-			assert.Equal(t, common.TopUpStatusSuccess, order.Status)
+			for i := range orders {
+				order := &orders[i]
+				order.OrgId, order.UserId, order.PlanId = orgID, users[0].Id, plan.Id
+				order.Money, order.PaymentProvider, order.Status = 10, PaymentProviderEpay, common.TopUpStatusPending
+				require.NoError(t, order.Insert(), "pending orders do not reserve purchase slots")
+			}
+			require.NoError(t, ExpireSubscriptionOrder("expired", PaymentProviderEpay))
+			orders[3].Status = common.TopUpStatusFailed
+			require.NoError(t, orders[3].Update())
+			for _, tradeNo := range []string{"expired", "failed"} {
+				assert.ErrorIs(t, CompleteSubscriptionOrder(tradeNo, "", PaymentProviderEpay, ""), ErrSubscriptionOrderStatusInvalid)
+			}
+			require.NoError(t, CompleteSubscriptionOrder("first", "", PaymentProviderEpay, ""))
+			require.NoError(t, CompleteSubscriptionOrder("first", "", PaymentProviderEpay, ""), "successful callbacks are idempotent")
+			assert.EqualError(t, CompleteSubscriptionOrder("second", "", PaymentProviderEpay, ""), "plan purchase limit reached")
 			var subs []UserSubscription
 			require.NoError(t, db.Where("org_id = ? AND user_id = ?", orgID, users[0].Id).Find(&subs).Error)
 			require.Len(t, subs, 1)
 			assert.Equal(t, int64(500), subs[0].AmountTotal)
+			require.NoError(t, db.First(&orders[1], orders[1].Id).Error)
+			assert.Equal(t, common.TopUpStatusPending, orders[1].Status)
+			var topups int64
+			require.NoError(t, db.Model(&TopUp{}).Where("org_id = ? AND user_id = ?", orgID, users[0].Id).Count(&topups).Error)
+			assert.Equal(t, int64(1), topups)
+		})
+	}
+}
 
+func TestConcurrentSubscriptionOrdersSharePurchaseLimit(t *testing.T) {
+	for _, team := range []bool{false, true} {
+		t.Run(fmt.Sprint("team=", team), func(t *testing.T) {
+			db, org, users := organizationBillingFixture(t)
+			if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
+				t.Skip("row-lock concurrency is verified on MySQL and PostgreSQL; SQLite issuance is covered by the sequential test")
+			}
+			plan := SubscriptionPlan{Title: "Limited", Enabled: true, Audience: "both", PriceAmount: 10, MaxPurchasePerUser: 1, DurationUnit: SubscriptionDurationMonth, DurationValue: 1, TotalAmount: 500}
+			require.NoError(t, db.Create(&plan).Error)
+			orgID := 0
+			if team {
+				orgID = org.Id
+				require.NoError(t, db.Model(&OrganizationMember{}).Where("org_id = ? AND user_id = ?", orgID, users[1].Id).Update("role", OrgRoleAdmin).Error)
+			}
+			for i, tradeNo := range []string{"concurrent-first", "concurrent-second"} {
+				userID := users[0].Id
+				if team {
+					userID = users[i].Id
+				}
+				order := SubscriptionOrder{OrgId: orgID, UserId: userID, PlanId: plan.Id, Money: 10, TradeNo: tradeNo, PaymentProvider: PaymentProviderEpay, Status: common.TopUpStatusPending}
+				require.NoError(t, order.Insert())
+				// Released orders have no snapshot and must remain subject to
+				// the same serialized purchase limit after upgrade.
+				require.NoError(t, db.Model(&order).Update("plan_snapshot", "").Error)
+			}
+			start := make(chan struct{})
+			results := make(chan error, 2)
+			for _, tradeNo := range []string{"concurrent-first", "concurrent-second"} {
+				go func(tradeNo string) {
+					<-start
+					results <- CompleteSubscriptionOrder(tradeNo, "", PaymentProviderEpay, "")
+				}(tradeNo)
+			}
+			close(start)
+			successes := 0
+			for range 2 {
+				if err := <-results; err != nil {
+					assert.EqualError(t, err, "plan purchase limit reached")
+				} else {
+					successes++
+				}
+			}
+			assert.Equal(t, 1, successes)
+			var subs []UserSubscription
+			require.NoError(t, db.Where("org_id = ? AND plan_id = ?", orgID, plan.Id).Find(&subs).Error)
+			require.Len(t, subs, 1)
+			var completed int64
+			require.NoError(t, db.Model(&SubscriptionOrder{}).Where("org_id = ? AND plan_id = ? AND status = ?", orgID, plan.Id, common.TopUpStatusSuccess).Count(&completed).Error)
+			assert.Equal(t, int64(1), completed)
 		})
 	}
 }

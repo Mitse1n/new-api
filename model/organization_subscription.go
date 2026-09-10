@@ -33,24 +33,15 @@ func ValidateOrganizationPlan(tx *gorm.DB, org *Organization, plan *Subscription
 			return ErrOrganizationSeats
 		}
 	}
-	if plan.MaxPurchasePerUser > 0 {
-		var count, pending int64
-		if err := tx.Model(&UserSubscription{}).Scopes(OrgScope(org.Id)).Where("plan_id = ?", plan.Id).Count(&count).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&SubscriptionOrder{}).Scopes(OrgScope(org.Id)).Where("plan_id = ? AND status = ? AND create_time > ?", plan.Id, common.TopUpStatusPending, common.GetTimestamp()-subscriptionCheckoutHoldSeconds).Count(&pending).Error; err != nil {
-			return err
-		}
-		if count+pending >= int64(plan.MaxPurchasePerUser) {
-			return errors.New("plan purchase limit reached")
-		}
-	}
-	return nil
+	return validateSubscriptionPurchaseLimit(tx, ResourceScope{OrgID: org.Id, AllMembers: true}, plan)
 }
 
 func CreateOrganizationSubscriptionFromPlanTx(tx *gorm.DB, orgID, actorID int, plan *SubscriptionPlan, source string) (*UserSubscription, error) {
 	var org Organization
 	if err := lockForUpdate(tx).Where("id = ?", orgID).First(&org).Error; err != nil {
+		return nil, err
+	}
+	if err := validateSubscriptionPurchaseLimit(tx, ResourceScope{OrgID: orgID, AllMembers: true}, plan); err != nil {
 		return nil, err
 	}
 	// Completion can arrive after suspension or a platform plan edit. Honor the

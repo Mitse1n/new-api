@@ -60,9 +60,6 @@ func runSubscriptionQuotaResetOnce() {
 			}
 		})
 	}
-	if err := model.ExpirePendingSubscriptionOrders(); err != nil {
-		logger.LogWarn(ctx, "subscription checkout expiry: "+err.Error())
-	}
 	if err := model.CleanupDeletedOrganizations(); err != nil {
 		logger.LogWarn(ctx, "organization cleanup: "+err.Error())
 	}

@@ -212,18 +212,6 @@ func (p *SubscriptionPlan) NormalizeDefaults() {
 	}
 }
 
-// Pending checkouts reserve a purchase slot for 24 hours. This is a local
-// reservation deadline, not proof that the payment provider cannot charge later.
-const subscriptionCheckoutHoldSeconds int64 = 24 * 60 * 60
-
-// ExpirePendingSubscriptionOrders releases abandoned checkout reservations.
-// Completed orders are retained, and delayed verified payments can still settle.
-func ExpirePendingSubscriptionOrders() error {
-	return DB.Model(&SubscriptionOrder{}).
-		Where("status = ? AND create_time <= ?", common.TopUpStatusPending, common.GetTimestamp()-subscriptionCheckoutHoldSeconds).
-		Update("status", common.TopUpStatusExpired).Error
-}
-
 // Subscription order (payment -> webhook -> create UserSubscription)
 type SubscriptionOrder struct {
 	PlanSnapshot string  `json:"-" gorm:"type:text"`
@@ -563,18 +551,20 @@ func ValidateAccountSubscriptionPlan(tx *gorm.DB, userID int, plan *Subscription
 		plan.Audience != "" && plan.Audience != "both" && plan.Audience != "personal" {
 		return errors.New("plan is not available for this account")
 	}
+	return validateSubscriptionPurchaseLimit(tx, ResourceScope{UserID: userID}, plan)
+}
+
+// Checkout checks are advisory; issuance repeats this check under the account
+// or organization lock. Pending orders do not count as purchased subscriptions.
+func validateSubscriptionPurchaseLimit(tx *gorm.DB, scope ResourceScope, plan *SubscriptionPlan) error {
 	if plan.MaxPurchasePerUser <= 0 {
 		return nil
 	}
-	scope := ResourceScope{UserID: userID}
-	var purchased, pending int64
+	var purchased int64
 	if err := scope.Apply(tx.Model(&UserSubscription{})).Where("plan_id = ?", plan.Id).Count(&purchased).Error; err != nil {
 		return err
 	}
-	if err := scope.Apply(tx.Model(&SubscriptionOrder{})).Where("plan_id = ? AND status = ? AND create_time > ?", plan.Id, common.TopUpStatusPending, common.GetTimestamp()-subscriptionCheckoutHoldSeconds).Count(&pending).Error; err != nil {
-		return err
-	}
-	if purchased+pending >= int64(plan.MaxPurchasePerUser) {
+	if purchased >= int64(plan.MaxPurchasePerUser) {
 		return errors.New("plan purchase limit reached")
 	}
 	return nil
@@ -594,6 +584,8 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		if err := ValidateAccountSubscriptionPlan(tx, userId, plan); err != nil {
 			return nil, err
 		}
+	} else if err := validateSubscriptionPurchaseLimit(tx, ResourceScope{UserID: userId}, plan); err != nil {
+		return nil, err
 	}
 	nowUnix := GetDBTimestamp()
 	now := time.Unix(nowUnix, 0)
@@ -688,8 +680,21 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if order.Status == common.TopUpStatusSuccess {
 			return nil
 		}
-		if order.Status != common.TopUpStatusPending && order.Status != common.TopUpStatusExpired && !(order.OrgId > 0 && order.Status == common.TopUpStatusFailed) {
+		if order.Status != common.TopUpStatusPending {
 			return ErrSubscriptionOrderStatusInvalid
+		}
+		// Lock before any catalog read so legacy orders without snapshots do
+		// not establish a stale MySQL repeatable-read snapshot while waiting.
+		if order.OrgId > 0 {
+			var org Organization
+			if err := lockForUpdate(tx).Select("id").Where("id = ?", order.OrgId).First(&org).Error; err != nil {
+				return err
+			}
+		} else {
+			var userRow User
+			if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&userRow).Error; err != nil {
+				return err
+			}
 		}
 		var plan *SubscriptionPlan
 		var err error
@@ -701,14 +706,6 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		}
 		if err != nil {
 			return err
-		}
-		// 锁定用户行：并发完成同一用户的不同订单（包括多实例部署下）时，
-		// 使 CreateUserSubscriptionFromPlanTx 的 MaxPurchasePerUser 检查按用户串行。
-		if order.OrgId == 0 {
-			var userRow User
-			if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&userRow).Error; err != nil {
-				return err
-			}
 		}
 		var subscription *UserSubscription
 		if order.OrgId > 0 {
