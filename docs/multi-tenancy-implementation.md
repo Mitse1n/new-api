@@ -210,3 +210,15 @@ ORGANIZATION_API_TEST_POSTGRES_DSN='host=127.0.0.1 port=59503 user=postgres dbna
 以上均通过。新增平台封禁测试覆盖 Owner 恢复/再次停用/删除均被拒绝、成员访问被拒绝、Key 状态更新、平台恢复，以及 Owner 自行停用后仍可自行恢复。日志响应测试覆盖 Personal、团队、平台 Admin 和 Root。此轮未重跑发布版升级和独立日志库矩阵，历史验证记录见前文。
 
 本机没有 Bun，前端使用已安装的 `web/node_modules/.bin` 执行同一套工具：`tsgo -b`、两份改动文件的 `oxlint -c .oxlintrc.json` 和 `oxfmt` 均通过；`NODE_OPTIONS=--no-experimental-webstorage ./node_modules/.bin/vitest run src/features/dashboard/hooks/__tests__/model-analytics.test.tsx src/features/organizations` 共 **30 项通过**。Node 参数用于避免本机原生 Web Storage 与 jsdom 冲突。
+
+## Midjourney 公开图片链接（2026-09-10）
+
+个人和组织统一保留 main 的公开图片链接语义：`/mj/image/:id` 无需登录、组织头或签名，按原有 `MjId` 查询并代理图片；任务不存在仍返回 400。生成链接恢复原格式，未完成任务保留 `?rand=`。移除本分支新增的 MJ 图片签名服务及其测试，不处理原有上游 ID 潜在重复问题。任务列表、详情、操作和计费继续使用组织作用域，原有图片代理 SSRF 校验保留。
+
+替代回归测试直接验证两种归属的无凭证图片访问和链接格式。SQLite **3.50.4**、MySQL **5.7.44**、PostgreSQL **9.6.24** 均通过；使用本机独立临时数据库，没有更新远端部署。没有 schema 变更。
+
+```sh
+go test ./relay ./controller ./service ./router -count=1
+MJ_IMAGE_TEST_MYSQL_DSN='root@tcp(127.0.0.1:62153)/mj_test?charset=utf8mb4&parseTime=true' go test ./relay -run TestMidjourneyImagesKeepPublicLinks -count=1
+MJ_IMAGE_TEST_POSTGRES_DSN='host=127.0.0.1 port=62154 user=postgres dbname=mj_test sslmode=disable' go test ./relay -run TestMidjourneyImagesKeepPublicLinks -count=1
+```

@@ -27,11 +27,9 @@ import (
 
 func RelayMidjourneyImage(c *gin.Context) {
 	taskId := c.Param("id")
-	orgID, _ := strconv.Atoi(c.Query("org"))
-	rowID, _ := strconv.Atoi(c.Query("task"))
-	midjourneyTask, err := service.GetMidjourneyImageWithAccess(orgID, rowID, taskId, c.Query(service.TaskArtifactAccessQueryParameter))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
+	midjourneyTask := model.GetByOnlyMJId(taskId)
+	if midjourneyTask == nil {
+		c.JSON(400, gin.H{
 			"error": "midjourney_task_not_found",
 		})
 		return
@@ -151,13 +149,9 @@ func coverMidjourneyTaskDto(c *gin.Context, originTask *model.Midjourney) (midjo
 	midjourneyTask.FinishTime = originTask.FinishTime
 	midjourneyTask.ImageUrl = ""
 	if originTask.ImageUrl != "" && setting.MjForwardUrlEnabled {
-		imageURL, err := service.BuildMidjourneyImageURL(originTask)
-		if err != nil {
-			common.SysError("issue Midjourney image access: " + err.Error())
-		}
-		midjourneyTask.ImageUrl = imageURL
+		midjourneyTask.ImageUrl = system_setting.ServerAddress + "/mj/image/" + originTask.MjId
 		if originTask.Status != "SUCCESS" {
-			midjourneyTask.ImageUrl += "&rand=" + strconv.FormatInt(time.Now().UnixNano(), 10)
+			midjourneyTask.ImageUrl += "?rand=" + strconv.FormatInt(time.Now().UnixNano(), 10)
 		}
 	} else {
 		midjourneyTask.ImageUrl = originTask.ImageUrl
